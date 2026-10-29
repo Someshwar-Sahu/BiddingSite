@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Auction Room - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen text-slate-800">
+
+  <!-- TOP HEADER -->
+  <header class="bg-white border-b border-gray-200 py-6 px-4 shadow-sm">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+      <div class="bg-red-600 text-white font-bold px-6 py-2 rounded-full text-sm uppercase tracking-wide shadow-sm">
+        Welcome to the Auction Room
+      </div>
+
+      <div class="bg-white border-2 border-gray-200 rounded-full px-8 py-2 text-center shadow-sm">
+        <span class="text-xs font-semibold text-gray-500 uppercase tracking-wider block">Auction</span>
+        <span id="auction-id-display" class="text-lg font-black text-gray-900 tracking-tight">NTA-EPACKPetro-07</span>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <div class="bg-red-600 text-white font-bold px-6 py-2 rounded-full text-base shadow-sm">
+          <span id="timer-display">Connecting...</span>
+        </div>
+        <button id="mute-btn" class="bg-gray-200 hover:bg-gray-300 p-2.5 rounded-full text-lg" title="Toggle Sound">
+          🔊
+        </button>
+      </div>
+    </div>
+
+    <!-- User / Role Status -->
+    <div class="max-w-7xl mx-auto mt-4 pt-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-600">
+      <div>
+        Logged in as: <strong id="company-name-display" class="text-gray-900 font-bold">Connecting...</strong>
+        <span id="role-badge" class="ml-2 px-2 py-0.5 rounded text-[11px] font-bold bg-blue-100 text-blue-800">Bidder</span>
+      </div>
+      <div id="savings-banner" class="hidden text-sm font-bold text-emerald-700 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+        💰 Live Procurement Savings: <span id="total-savings-val">₹0</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- TABLE -->
+  <main class="max-w-7xl mx-auto py-8 px-4">
+    <div class="bg-white rounded-xl shadow-md overflow-hidden border border-gray-200">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-[#1e2238] text-white text-xs font-bold uppercase tracking-wider">
+              <th class="py-4 px-4">Product Name</th>
+              <th class="py-4 px-3">Type</th>
+              <th class="py-4 px-3">Qty/UOM</th>
+              <th class="py-4 px-3">Reserve Price</th>
+              <th class="py-4 px-3">Bid Decrement</th>
+              <th class="py-4 px-4 text-center">Lowest Bid</th>
+              <th class="py-4 px-4 text-center">Your Bid</th>
+              <th class="py-4 px-6 text-center">Bid</th>
+              <th class="py-4 px-4 text-center">Submit</th>
+            </tr>
+          </thead>
+          <tbody id="lots-table-body" class="divide-y divide-gray-200 text-sm">
+            <tr>
+              <td colspan="9" class="py-12 text-center text-gray-400">Loading auction items...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- LOAD MODULAR JS -->
+  <script type="module" src="/js/bidding-room.js"></script>
+</body>
+</html>

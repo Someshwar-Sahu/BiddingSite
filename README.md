@@ -51,8 +51,28 @@ BiddingSite/
 │   ├── WORKFLOWS_AND_ROLES.md
 │   ├── API_AND_WEBSOCKET_SPEC.md
 │   └── DEPLOYMENT_GUIDE.md
-├── src/                              # Application source code (to be initialized)
+├── src/                              # Application source code
+├── tests/                            # Unit and integration test suites
+│   ├── unit/                         # Core calculation & validation tests
+│   └── integration/                  # WebSocket & API lifecycle tests
 ├── package.json
+├── tsconfig.json
 └── README.md
 ```
+
+---
+
+## Development & Collaboration Protocol
+
+To ensure deep understanding and hands-on mastery of the codebase:
+
+1. **Hands-On Coding**:
+   - The assistant provides terminal commands, structured explanations, and production-grade code snippets.
+   - The developer writes and inspects the code manually into their workspace to learn the mechanics of every component.
+2. **Strict Test-Driven Discipline (TDD)**:
+   - Every module (Bid Calculator, Anti-Sniping Timer, Magic Link Auth, Decrement Validator) **must** have dedicated test files before or alongside implementation.
+   - **Dual Testing Standard**:
+     - **Positive Tests**: Verifying the expected happy paths (e.g., valid decrement placed, timer extension triggered, L1 updated).
+     - **Negative Tests**: Verifying intentional rejections and boundaries (e.g., bid > max allowed, bid from unapproved vendor, bid after hard stop, invalid decrements, concurrent duplicate bids).
+
 
