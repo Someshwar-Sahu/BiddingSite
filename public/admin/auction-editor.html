@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auction Builder & Editor - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <!-- TOP SHARED NAV -->
+  <header id="admin-header" class="bg-[#1e2238] py-4 shadow-md sticky top-0 z-40"></header>
+
+  <main class="max-w-5xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
+
+    <!-- FORM CARD -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+
+      <!-- HEADER & MODE BADGE -->
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 border-b border-slate-100 gap-2">
+        <div>
+          <h1 id="editor-heading" class="text-xl font-bold text-slate-900">Configure Planned Auction</h1>
+          <p class="text-xs text-slate-500 mt-0.5">Define multi-lot procurement items, timing rules, and assign exclusive vendor pools.</p>
+        </div>
+        <span id="editor-badge" class="bg-blue-100 text-blue-800 text-xs font-bold px-3 py-1 rounded-full self-start sm:self-center">
+          New Tender
+        </span>
+      </div>
+
+      <form id="auction-form" class="space-y-6 text-xs">
+        <input type="hidden" id="edit-auction-id" value="" />
+
+        <!-- 1. CORPORATE CLIENT & AUCTION ID -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Corporate Client (Buyer)</label>
+            <select id="input-client" required class="w-full border border-slate-300 p-2.5 rounded-lg bg-slate-50 font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500">
+              <option value="">Loading client companies...</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1 flex items-center justify-between">
+              <span>Auction ID (Auto-Generated)</span>
+              <button type="button" id="btn-regen-id" class="text-blue-600 hover:text-blue-800 font-bold text-[11px] flex items-center gap-1">
+                <span>🔄</span> Regenerate
+              </button>
+            </label>
+            <input id="input-auction-id" type="text" required class="w-full border border-slate-300 p-2.5 rounded-lg font-mono font-bold text-slate-900 bg-slate-50 focus:ring-2 focus:ring-blue-500" />
+          </div>
+        </div>
+
+        <!-- 2. EVENT TITLE -->
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Procurement Event Title</label>
+          <input id="input-title" type="text" placeholder="e.g. Q4 Bulk Steam Coal & Non-PCB Pallets Tender" required class="w-full border border-slate-300 p-2.5 rounded-lg text-sm focus:ring-2 focus:ring-blue-500" />
+        </div>
+
+        <!-- 3. TIMING & RULES -->
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Scheduled Start Time</label>
+            <input id="input-start-time" type="datetime-local" required class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Duration (Minutes)</label>
+            <input id="input-duration" type="number" value="60" min="5" required class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Anti-Sniping Trigger (Min)</label>
+            <input id="input-anti-sniping" type="number" value="2" min="1" max="10" required class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Hard Stop Buffer (Min)</label>
+            <input id="input-max-buffer" type="number" value="30" min="5" required class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          </div>
+        </div>
+
+        <!-- 4. MULTI-LOT DYNAMIC BUILDER -->
+        <div class="space-y-3 pt-2">
+          <div class="flex items-center justify-between pb-2 border-b border-slate-200">
+            <div>
+              <h2 class="font-bold text-slate-900 text-sm">Procurement Lots</h2>
+              <p class="text-[11px] text-slate-500">Each lot runs concurrently with independent ceiling, reserve, and decrement steps.</p>
+            </div>
+            <button type="button" id="btn-add-lot" class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors flex items-center gap-1">
+              <span>+</span> Add Lot
+            </button>
+          </div>
+
+          <div id="lots-container" class="space-y-3">
+            <!-- Dynamic Lot Cards Rendered Here -->
+          </div>
+        </div>
+
+        <!-- 5. EXCLUSIVE ASSIGNED VENDORS -->
+        <div class="space-y-3 pt-2">
+          <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-2 border-b border-slate-200 gap-2">
+            <div>
+              <h2 class="font-bold text-slate-900 text-sm">Assign Exclusive Vendors (Private Tender)</h2>
+              <p class="text-[11px] text-slate-500">Only vendors added below will be authorized to access this room and submit bids.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="btn-pool-modal" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg border border-slate-300 transition-colors flex items-center gap-1">
+                <span>🏢</span> Pick from Client Pool
+              </button>
+              <button type="button" id="btn-add-custom-vendor" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1">
+                <span>+</span> Add New Vendor
+              </button>
+            </div>
+          </div>
+
+          <div id="vendors-container" class="space-y-2">
+            <!-- Dynamic Assigned Vendor Rows Rendered Here -->
+          </div>
+        </div>
+
+        <!-- 6. EDIT MODE NOTIFICATION TOGGLE (MATERIAL VS NON-MATERIAL) -->
+        <div id="notification-toggle-box" class="hidden bg-amber-50 border border-amber-200 rounded-xl p-4 text-xs space-y-2">
+          <div class="flex items-start gap-2.5">
+            <input id="chk-notify-vendors" type="checkbox" class="mt-0.5 rounded text-blue-600 focus:ring-blue-500" />
+            <div>
+              <label for="chk-notify-vendors" class="font-bold text-amber-900 cursor-pointer">
+                Notify assigned vendors of material updates
+              </label>
+              <p class="text-[11px] text-amber-700 mt-0.5">
+                Check this box only if schedule timings, lots, or reserve price terms have changed so vendors receive an update notice. Leave unchecked for minor cosmetic edits or typo fixes.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. ACTION BUTTONS -->
+        <div class="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+          <a href="/admin/auctions" class="px-5 py-2.5 rounded-lg border border-slate-300 font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+            Cancel
+          </a>
+          <button type="submit" id="btn-submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-8 py-2.5 rounded-lg shadow-sm text-sm transition-colors flex items-center gap-2">
+            <span>💾</span> Save & Publish Tender
+          </button>
+        </div>
+
+      </form>
+    </div>
+
+  </main>
+
+  <!-- MODAL: PICK FROM CLIENT'S SAVED VENDOR POOL -->
+  <div id="pool-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 class="text-base font-bold text-slate-900">Select Approved Pool Vendors</h3>
+          <p id="pool-modal-subtitle" class="text-xs text-slate-500">Vendors registered with this corporate buyer.</p>
+        </div>
+        <button id="close-pool-modal" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <div id="pool-vendors-checklist" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
+        <!-- Rendered checkboxes -->
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+        <button id="cancel-pool-modal" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors">
+          Cancel
+        </button>
+        <button id="confirm-pool-modal" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors">
+          Add Selected
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin/auction-editor.js"></script>
+</body>
+</html>

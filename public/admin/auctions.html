@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auctions Manager - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <!-- TOP SHARED NAV -->
+  <header id="admin-header" class="bg-[#1e2238] py-4 shadow-md sticky top-0 z-40"></header>
+
+  <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
+
+    <!-- ACTION HEADER & FILTERS -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Procurement Auctions</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Manage live bidding rooms, update scheduled parameters, or generate official audit settlements.</p>
+      </div>
+
+      <div class="flex items-center gap-3">
+        <!-- Search filter -->
+        <input id="auction-search" type="text" placeholder="Search by ID, client, or title..." class="text-xs border border-slate-300 rounded-lg px-3 py-2 w-64 focus:outline-none focus:ring-2 focus:ring-blue-500" />
+
+        <!-- Status Filter -->
+        <select id="status-filter" class="text-xs border border-slate-300 rounded-lg px-3 py-2 bg-slate-50 font-medium text-slate-700">
+          <option value="all">All Statuses</option>
+          <option value="live">Live Now</option>
+          <option value="scheduled">Scheduled</option>
+          <option value="extended">Extended</option>
+          <option value="ended">Ended</option>
+        </select>
+
+        <a href="/admin/auction-editor" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow transition-colors flex items-center gap-1.5 whitespace-nowrap">
+          <span>+</span> New Planned Auction
+        </a>
+      </div>
+    </div>
+
+    <!-- AUCTIONS LIST CONTAINER -->
+    <div id="auctions-container" class="space-y-4">
+      <div class="p-8 text-center text-xs text-slate-400 bg-white rounded-xl border border-slate-200">
+        Loading auctions...
+      </div>
+    </div>
+
+  </main>
+
+  <!-- VENDOR INVITES MODAL -->
+  <div id="invites-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 id="modal-auction-title" class="text-base font-bold text-slate-900">Vendor Access Links</h3>
+          <p id="modal-auction-sub" class="text-xs text-slate-500">Private 1-click tokenized magic links and WhatsApp dispatch.</p>
+        </div>
+        <button id="close-modal-btn" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <div id="modal-invites-list" class="space-y-3 text-xs">
+        <!-- Rendered dynamically -->
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex justify-end">
+        <button id="close-modal-footer-btn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors">
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin/auctions.js"></script>
+</body>
+</html>

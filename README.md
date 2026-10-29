@@ -1,6 +1,6 @@
-# B2B Reverse E-Auction Platform
+# NexTrade Auctions - B2B Reverse E-Auction Platform
 
-A specialized, low-latency B2B e-auction platform modeled after industrial procurement platforms (such as Prime Trade Auctions). It enables corporate buyers to host scheduled reverse auctions for bulk commodities, industrial materials, and equipment, allowing vetted vendors to compete in real-time down to the lowest bid.
+A specialized, high-performance, low-latency B2B reverse e-auction platform for industrial procurement. It enables corporate buyers to host scheduled reverse auctions for bulk commodities, industrial materials, and equipment, allowing vetted vendors to compete in real-time down to the lowest bid.
 
 ---
 
