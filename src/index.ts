@@ -56,6 +56,12 @@ if (!existingAuction) {
   `).run();
 }
 
+// Always ensure baseline approved suppliers are linked in company_vendors
+db.prepare(`
+  INSERT OR IGNORE INTO company_vendors (company_id, vendor_id)
+  VALUES ('org_epack', 'vnd_gold'), ('org_epack', 'vnd_bridge')
+`).run();
+
 // 3. Start Server
 const { httpServer } = createAuctionServer(db);
 

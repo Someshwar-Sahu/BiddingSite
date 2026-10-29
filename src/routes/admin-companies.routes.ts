@@ -42,6 +42,20 @@ export function createAdminCompaniesRouter(db: Database.Database): Router {
   // Add/associate a vendor into a company's specific vendor pool
   router.post('/companies/:id/vendors', (req, res) => {
     const companyId = req.params.id;
+
+    // Direct linking by existing vendor ID
+    if (req.body.vendorId) {
+      try {
+        db.prepare(`
+          INSERT OR IGNORE INTO company_vendors (company_id, vendor_id)
+          VALUES (?, ?)
+        `).run(companyId, req.body.vendorId);
+        return res.json({ success: true, vendorId: req.body.vendorId });
+      } catch (err: any) {
+        return res.status(400).json({ error: err.message });
+      }
+    }
+
     const { company_name, contact_person, email, phone, gstin, pan } = req.body;
 
     if (!email || !company_name) {
@@ -70,6 +84,19 @@ export function createAdminCompaniesRouter(db: Database.Database): Router {
     try {
       const vendorId = transaction();
       res.json({ success: true, vendorId });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Remove vendor from a company's vendor pool
+  router.delete('/companies/:companyId/vendors/:vendorId', (req, res) => {
+    try {
+      db.prepare(`
+        DELETE FROM company_vendors 
+        WHERE company_id = ? AND vendor_id = ?
+      `).run(req.params.companyId, req.params.vendorId);
+      res.json({ success: true });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }

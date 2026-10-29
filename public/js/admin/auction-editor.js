@@ -285,7 +285,7 @@ function renderAssignedVendors() {
   if (assignedVendors.length === 0) {
     container.innerHTML = `
       <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-lg">
-        No vendors assigned yet. Pick from the client's approved pool or add new customer-provided vendors.
+        No vendors assigned yet. Click "Pick from Vendor Pool / Directory" to select suppliers, or "+ Add Custom Vendor".
       </div>
     `;
     return;
@@ -329,25 +329,54 @@ window.removeVendor = function (index) {
   renderAssignedVendors();
 };
 
-// --- POOL MODAL CONTROLS ---
-function openPoolModal() {
+// --- POOL & MASTER VENDOR MODAL CONTROLS ---
+async function openPoolModal() {
   const modal = document.getElementById('pool-modal');
   const checklist = document.getElementById('pool-vendors-checklist');
+  const clientSelect = document.getElementById('input-client');
+  const orgId = clientSelect.value;
+  const orgName = clientSelect.options[clientSelect.selectedIndex]?.text || 'Selected Buyer';
+
+  document.getElementById('pool-modal-subtitle').innerText = `Select approved suppliers for ${orgName}`;
+
+  // Fetch company pool AND master directory
+  let masterVendors = [];
+  try {
+    const res = await fetch('/api/admin/overview');
+    const data = await res.json();
+    masterVendors = (data.vendors || []).filter((v) => v.status === 'approved');
+  } catch (e) {}
+
+  await loadCompanyVendorPool(orgId);
+
+  const poolIds = new Set(companyVendorPool.map((v) => v.id));
+  const otherVendors = masterVendors.filter((v) => !poolIds.has(v.id));
+
+  let html = '';
+
+  // 1. Company Pre-Approved Pool Section
+  html += `
+    <div class="space-y-2">
+      <div class="flex items-center justify-between pb-1.5 border-b border-slate-200">
+        <span class="font-bold text-slate-900 text-xs">🏢 Pre-Approved for ${orgName} (${companyVendorPool.length})</span>
+        <span class="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">Buyer's Saved Pool</span>
+      </div>
+  `;
 
   if (companyVendorPool.length === 0) {
-    checklist.innerHTML = `
-      <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-lg">
-        This corporate buyer has no pre-registered vendors in its pool yet. Use "+ Add New Vendor" to add them.
+    html += `
+      <div class="p-3 text-center text-slate-400 bg-slate-50 rounded-lg text-xs">
+        No suppliers pre-linked to ${orgName} yet. Select from the Master Directory below to link them!
       </div>
     `;
   } else {
-    checklist.innerHTML = companyVendorPool
+    html += companyVendorPool
       .map((cv) => {
         const isAlreadyAdded = assignedVendors.some((av) => av.email === cv.email);
         return `
-        <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer">
-          <div class="flex items-center gap-2">
-            <input type="checkbox" value="${cv.id}" data-company="${cv.company_name}" data-email="${cv.email}" data-phone="${cv.phone || ''}" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
+        <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer transition-colors">
+          <div class="flex items-center gap-2.5">
+            <input type="checkbox" value="${cv.id}" data-company="${cv.company_name}" data-email="${cv.email}" data-phone="${cv.phone || ''}" data-in-pool="true" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
           isAlreadyAdded ? 'checked disabled' : ''
         } />
             <div>
@@ -357,15 +386,53 @@ function openPoolModal() {
           </div>
           ${
             isAlreadyAdded
-              ? '<span class="text-[10px] text-slate-400 font-semibold">Already Added</span>'
-              : '<span class="text-[10px] text-emerald-600 font-bold">Approved</span>'
+              ? '<span class="text-[10px] text-slate-400 font-semibold bg-slate-200 px-2 py-0.5 rounded">In Tender</span>'
+              : '<span class="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded">Pre-Approved</span>'
           }
         </label>
       `;
       })
       .join('');
   }
+  html += '</div>';
 
+  // 2. Master Directory Approved Vendors Section
+  if (otherVendors.length > 0) {
+    html += `
+      <div class="space-y-2 pt-3">
+        <div class="flex items-center justify-between pb-1.5 border-b border-slate-200">
+          <span class="font-bold text-slate-900 text-xs">🌐 Other Master Directory Approved Suppliers (${otherVendors.length})</span>
+          <span class="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded font-bold">Auto-links to Buyer Pool</span>
+        </div>
+    `;
+
+    html += otherVendors
+      .map((ov) => {
+        const isAlreadyAdded = assignedVendors.some((av) => av.email === ov.email);
+        return `
+        <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer transition-colors">
+          <div class="flex items-center gap-2.5">
+            <input type="checkbox" value="${ov.id}" data-company="${ov.company_name}" data-email="${ov.email}" data-phone="${ov.phone || ''}" data-in-pool="false" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
+          isAlreadyAdded ? 'checked disabled' : ''
+        } />
+            <div>
+              <strong class="text-slate-800 text-xs">${ov.company_name}</strong>
+              <div class="text-[11px] text-slate-500">${ov.email} | ${ov.phone || 'No phone'}</div>
+            </div>
+          </div>
+          ${
+            isAlreadyAdded
+              ? '<span class="text-[10px] text-slate-400 font-semibold bg-slate-200 px-2 py-0.5 rounded">In Tender</span>'
+              : '<span class="text-[10px] text-blue-700 font-bold bg-blue-100 px-2 py-0.5 rounded">+ Link & Add</span>'
+          }
+        </label>
+      `;
+      })
+      .join('');
+    html += '</div>';
+  }
+
+  checklist.innerHTML = html;
   modal.classList.remove('hidden');
 }
 
@@ -373,16 +440,37 @@ function closePoolModal() {
   document.getElementById('pool-modal')?.classList.add('hidden');
 }
 
-function confirmPoolSelection() {
+async function confirmPoolSelection() {
   const checkboxes = document.querySelectorAll('.pool-checkbox:checked:not(:disabled)');
-  checkboxes.forEach((cb) => {
+  const clientSelect = document.getElementById('input-client');
+  const orgId = clientSelect.value;
+
+  let addedCount = 0;
+  for (const cb of checkboxes) {
     assignedVendors.push({
       company_name: cb.dataset.company,
       contact_person: '',
       email: cb.dataset.email,
       phone: cb.dataset.phone,
     });
-  });
+    addedCount++;
+
+    // If vendor was from Master Directory (not yet in company pool), auto-link to company pool!
+    if (cb.dataset.inPool === 'false' && orgId) {
+      try {
+        await fetch(`/api/admin/companies/${orgId}/vendors`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendorId: cb.value }),
+        });
+      } catch (e) {}
+    }
+  }
+
+  if (addedCount > 0) {
+    showToast(`${addedCount} supplier(s) added to tender!`, 'success');
+    await loadCompanyVendorPool(orgId);
+  }
 
   renderAssignedVendors();
   closePoolModal();

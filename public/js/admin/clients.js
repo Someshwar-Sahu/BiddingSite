@@ -2,6 +2,7 @@ import { renderAdminNav } from './nav.js';
 import { showToast } from '../toast.js';
 
 let currentCompanyId = null;
+let allMasterVendors = [];
 
 document.addEventListener('DOMContentLoaded', () => {
   renderAdminNav('clients');
@@ -14,6 +15,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('close-pool-modal-btn')?.addEventListener('click', closePoolModal);
   document.getElementById('close-pool-footer-btn')?.addEventListener('click', closePoolModal);
   document.getElementById('add-pool-vendor-form')?.addEventListener('submit', handleAddPoolVendor);
+  document.getElementById('btn-link-master-vendor')?.addEventListener('click', handleLinkMasterVendor);
 });
 
 async function loadCompanies() {
@@ -94,20 +96,52 @@ window.openCompanyPool = async function (companyId, companyName) {
   const modal = document.getElementById('client-pool-modal');
   document.getElementById('modal-company-name').innerText = `${companyName} - Vendor Pool`;
 
+  // Fetch master vendors for quick linking
+  try {
+    const res = await fetch('/api/admin/overview');
+    const data = await res.json();
+    allMasterVendors = (data.vendors || []).filter((v) => v.status === 'approved');
+  } catch (e) {
+    allMasterVendors = [];
+  }
+
   await loadCompanyPoolVendors(companyId);
   modal.classList.remove('hidden');
 };
 
 async function loadCompanyPoolVendors(companyId) {
   const container = document.getElementById('company-vendors-list');
+  const countBadge = document.getElementById('pool-count-badge');
+  const selectMaster = document.getElementById('select-master-vendor');
+
   try {
     const res = await fetch(`/api/admin/companies/${companyId}/vendors`);
     const vendors = await res.json();
 
+    if (countBadge) countBadge.innerText = `${vendors.length} supplier(s)`;
+
+    // Populate the dropdown with master suppliers NOT in this pool
+    const poolIds = new Set(vendors.map((v) => v.id));
+    const availableToAdd = allMasterVendors.filter((mv) => !poolIds.has(mv.id));
+
+    if (selectMaster) {
+      if (availableToAdd.length === 0) {
+        selectMaster.innerHTML = '<option value="">All master suppliers are already in this pool</option>';
+        document.getElementById('btn-link-master-vendor').disabled = true;
+      } else {
+        selectMaster.innerHTML =
+          '<option value="">Select a supplier to link...</option>' +
+          availableToAdd
+            .map((mv) => `<option value="${mv.id}">${mv.company_name} (${mv.email})</option>`)
+            .join('');
+        document.getElementById('btn-link-master-vendor').disabled = false;
+      }
+    }
+
     if (vendors.length === 0) {
       container.innerHTML = `
         <div class="p-6 text-center text-slate-400 bg-slate-50 rounded-lg">
-          No vendors currently in this company's pool. Use the form above to add an approved supplier.
+          No suppliers currently linked to this buyer. Use the dropdown above to link an existing supplier.
         </div>
       `;
       return;
@@ -118,10 +152,15 @@ async function loadCompanyPoolVendors(companyId) {
         (v) => `
       <div class="p-2.5 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
         <div>
-          <strong class="text-slate-800 text-xs">${v.company_name}</strong>
+          <strong class="text-slate-800 text-xs font-semibold">${v.company_name}</strong>
           <div class="text-[11px] text-slate-500">${v.email} | ${v.phone || 'No phone'}</div>
         </div>
-        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Approved Supplier</span>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded">Approved Supplier</span>
+          <button type="button" onclick="window.unlinkVendor('${companyId}', '${v.id}', '${escapeQuotes(v.company_name)}')" class="text-red-500 hover:text-red-700 font-bold text-xs px-2 py-1 rounded hover:bg-red-50">
+            ✕ Unlink
+          </button>
+        </div>
       </div>
     `
       )
@@ -130,6 +169,44 @@ async function loadCompanyPoolVendors(companyId) {
     container.innerHTML = `<p class="text-red-500">Failed to load vendors: ${err.message}</p>`;
   }
 }
+
+async function handleLinkMasterVendor() {
+  const select = document.getElementById('select-master-vendor');
+  const vendorId = select.value;
+  if (!vendorId || !currentCompanyId) {
+    showToast('Please select a supplier from the list.', 'warning');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/admin/companies/${currentCompanyId}/vendors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendorId }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showToast('Supplier linked to buyer pool!', 'success');
+    await loadCompanyPoolVendors(currentCompanyId);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+window.unlinkVendor = async function (companyId, vendorId, companyName) {
+  try {
+    const res = await fetch(`/api/admin/companies/${companyId}/vendors/${vendorId}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) throw new Error('Failed to unlink vendor');
+    showToast(`${companyName} unlinked from pool.`, 'info');
+    await loadCompanyPoolVendors(companyId);
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+};
 
 async function handleAddPoolVendor(e) {
   e.preventDefault();
@@ -153,7 +230,7 @@ async function handleAddPoolVendor(e) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error);
 
-    showToast(`Vendor added to company pool!`, 'success');
+    showToast(`New supplier registered and added to pool!`, 'success');
     document.getElementById('add-pool-vendor-form').reset();
     await loadCompanyPoolVendors(currentCompanyId);
   } catch (err) {

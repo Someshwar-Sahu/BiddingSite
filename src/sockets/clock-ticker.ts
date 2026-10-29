@@ -39,3 +39,4 @@ export function startAuctionTicker(io: SocketIOServer, db: Database.Database): N
 
   return ticker;
 }
+

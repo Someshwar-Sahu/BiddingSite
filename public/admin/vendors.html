@@ -17,7 +17,7 @@
     <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
       <div>
         <h1 class="text-xl font-bold text-slate-900">Master Vendor Directory & KYC Queue</h1>
-        <p class="text-xs text-slate-500 mt-0.5">Verify vendor onboarding credentials, review tax compliance (GST/PAN), and approve suppliers for tenders.</p>
+        <p class="text-xs text-slate-500 mt-0.5">Verify vendor onboarding credentials, review tax compliance (GST/PAN), and assign suppliers to corporate buyers.</p>
       </div>
 
       <div class="flex items-center gap-3">
@@ -42,12 +42,13 @@
               <th class="p-4">Email & Phone</th>
               <th class="p-4">Tax Identification (GST/PAN)</th>
               <th class="p-4">Compliance Status</th>
-              <th class="p-4 text-center">Verification Action</th>
+              <th class="p-4">Assigned Corporate Buyers</th>
+              <th class="p-4 text-center">Action</th>
             </tr>
           </thead>
           <tbody id="vendors-tbody" class="divide-y divide-slate-100">
             <tr>
-              <td colspan="6" class="p-8 text-center text-slate-400">Loading master vendor directory...</td>
+              <td colspan="7" class="p-8 text-center text-slate-400">Loading master vendor directory...</td>
             </tr>
           </tbody>
         </table>
@@ -55,6 +56,37 @@
     </div>
 
   </main>
+
+  <!-- MODAL: ASSIGN VENDOR TO CORPORATE BUYER -->
+  <div id="assign-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 id="assign-vendor-title" class="text-base font-bold text-slate-900">Assign Supplier to Buyer</h3>
+          <p class="text-xs text-slate-500">Authorize this supplier for a corporate client's tenders.</p>
+        </div>
+        <button id="close-assign-modal" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="font-bold text-slate-700 block mb-1">Corporate Client (Buyer)</label>
+          <select id="assign-client-select" class="w-full border border-slate-300 p-2.5 rounded-lg bg-slate-50 text-xs font-medium">
+            <option value="">Loading corporate clients...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+        <button id="cancel-assign-btn" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors">
+          Cancel
+        </button>
+        <button id="confirm-assign-btn" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors">
+          Link Supplier
+        </button>
+      </div>
+    </div>
+  </div>
 
   <script type="module" src="/js/admin/vendors.js"></script>
 </body>

@@ -2,14 +2,35 @@ import { renderAdminNav } from './nav.js';
 import { showToast } from '../toast.js';
 
 let allVendors = [];
+let allCompanies = [];
+let selectedVendorForAssignment = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   renderAdminNav('vendors');
   loadVendors();
+  loadCompanies();
 
   document.getElementById('vendor-search')?.addEventListener('input', applyFilters);
   document.getElementById('vendor-status-filter')?.addEventListener('change', applyFilters);
+
+  // Assign modal handlers
+  document.getElementById('close-assign-modal')?.addEventListener('click', closeAssignModal);
+  document.getElementById('cancel-assign-btn')?.addEventListener('click', closeAssignModal);
+  document.getElementById('confirm-assign-btn')?.addEventListener('click', handleConfirmAssign);
 });
+
+async function loadCompanies() {
+  try {
+    const res = await fetch('/api/admin/companies');
+    allCompanies = await res.json();
+    const select = document.getElementById('assign-client-select');
+    if (select) {
+      select.innerHTML = allCompanies
+        .map((c) => `<option value="${c.id}">${c.name}</option>`)
+        .join('');
+    }
+  } catch (err) {}
+}
 
 async function loadVendors() {
   try {
@@ -33,7 +54,8 @@ function applyFilters() {
       (v.contact_person && v.contact_person.toLowerCase().includes(query)) ||
       (v.email && v.email.toLowerCase().includes(query)) ||
       (v.gstin && v.gstin.toLowerCase().includes(query)) ||
-      (v.pan && v.pan.toLowerCase().includes(query));
+      (v.pan && v.pan.toLowerCase().includes(query)) ||
+      (v.assigned_companies && v.assigned_companies.toLowerCase().includes(query));
 
     const matchesStatus = status === 'all' || v.status === status;
     return matchesQuery && matchesStatus;
@@ -49,7 +71,7 @@ function renderVendors(vendors) {
   if (vendors.length === 0) {
     tbody.innerHTML = `
       <tr>
-        <td colspan="6" class="p-8 text-center text-slate-400">
+        <td colspan="7" class="p-8 text-center text-slate-400">
           No vendors found matching your filter criteria.
         </td>
       </tr>
@@ -90,14 +112,26 @@ function renderVendors(vendors) {
         </span>
       </td>
 
-      <td class="p-4 text-center">
+      <td class="p-4">
         ${
-          v.status !== 'approved'
-            ? `<button onclick="window.approveVendor('${v.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm text-xs transition-colors">
-                ✓ Approve KYC
-              </button>`
-            : '<span class="text-slate-400 font-semibold text-xs">Verified & Active</span>'
+          v.assigned_companies
+            ? `<span class="bg-blue-50 text-blue-800 border border-blue-200 px-2 py-1 rounded text-[11px] font-semibold inline-block">${v.assigned_companies}</span>`
+            : '<span class="text-slate-400 text-[11px] italic">Not assigned to any client</span>'
         }
+      </td>
+
+      <td class="p-4 text-center">
+        <div class="flex items-center justify-center gap-2">
+          ${
+            v.status !== 'approved'
+              ? `<button onclick="window.approveVendor('${v.id}')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-3 py-1.5 rounded-lg shadow-sm text-xs transition-colors">
+                  ✓ Approve KYC
+                </button>`
+              : `<button onclick="window.openAssignModal('${v.id}', '${escapeQuotes(v.company_name)}')" class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded-lg border border-blue-200 text-xs transition-colors whitespace-nowrap">
+                  + Assign to Buyer
+                </button>`
+          }
+        </div>
       </td>
     </tr>
   `
@@ -115,3 +149,44 @@ window.approveVendor = async function (vendorId) {
     showToast(err.message, 'error');
   }
 };
+
+window.openAssignModal = function (vendorId, companyName) {
+  selectedVendorForAssignment = vendorId;
+  const modal = document.getElementById('assign-modal');
+  document.getElementById('assign-vendor-title').innerText = `Assign "${companyName}"`;
+  modal.classList.remove('hidden');
+};
+
+function closeAssignModal() {
+  document.getElementById('assign-modal')?.classList.add('hidden');
+  selectedVendorForAssignment = null;
+}
+
+async function handleConfirmAssign() {
+  if (!selectedVendorForAssignment) return;
+  const select = document.getElementById('assign-client-select');
+  const companyId = select.value;
+  const companyName = select.options[select.selectedIndex]?.text || 'Corporate Buyer';
+
+  try {
+    const res = await fetch(`/api/admin/companies/${companyId}/vendors`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendorId: selectedVendorForAssignment }),
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error);
+
+    showToast(`Supplier assigned to ${companyName}!`, 'success');
+    closeAssignModal();
+    loadVendors();
+  } catch (err) {
+    showToast(err.message, 'error');
+  }
+}
+
+function escapeQuotes(str) {
+  if (!str) return '';
+  return str.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+}

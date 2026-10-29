@@ -104,11 +104,11 @@
               <p class="text-[11px] text-slate-500">Only vendors added below will be authorized to access this room and submit bids.</p>
             </div>
             <div class="flex items-center gap-2">
-              <button type="button" id="btn-pool-modal" class="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg border border-slate-300 transition-colors flex items-center gap-1">
-                <span>🏢</span> Pick from Client Pool
+              <button type="button" id="btn-pool-modal" class="bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded-lg border border-blue-200 transition-colors flex items-center gap-1">
+                <span>🏢</span> Pick from Vendor Pool / Directory
               </button>
               <button type="button" id="btn-add-custom-vendor" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold px-3 py-1.5 rounded-lg border border-emerald-200 transition-colors flex items-center gap-1">
-                <span>+</span> Add New Vendor
+                <span>+</span> Add Custom Vendor
               </button>
             </div>
           </div>
@@ -148,27 +148,27 @@
 
   </main>
 
-  <!-- MODAL: PICK FROM CLIENT'S SAVED VENDOR POOL -->
+  <!-- MODAL: SELECT VENDORS FROM CLIENT POOL OR MASTER DIRECTORY -->
   <div id="pool-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto">
+    <div class="bg-white rounded-xl shadow-2xl max-w-xl w-full p-6 space-y-4 max-h-[85vh] overflow-y-auto">
       <div class="flex items-center justify-between pb-3 border-b border-slate-200">
         <div>
-          <h3 class="text-base font-bold text-slate-900">Select Approved Pool Vendors</h3>
-          <p id="pool-modal-subtitle" class="text-xs text-slate-500">Vendors registered with this corporate buyer.</p>
+          <h3 id="pool-modal-title" class="text-base font-bold text-slate-900">Select Vendors for Tender</h3>
+          <p id="pool-modal-subtitle" class="text-xs text-slate-500">Pick pre-approved suppliers or add from the master directory.</p>
         </div>
         <button id="close-pool-modal" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
       </div>
 
-      <div id="pool-vendors-checklist" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
-        <!-- Rendered checkboxes -->
+      <div id="pool-vendors-checklist" class="space-y-4 text-xs max-h-72 overflow-y-auto pr-1">
+        <!-- Rendered sections -->
       </div>
 
-      <div class="pt-3 border-t border-slate-100 flex justify-end gap-2">
+      <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
         <button id="cancel-pool-modal" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors">
           Cancel
         </button>
-        <button id="confirm-pool-modal" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg transition-colors">
-          Add Selected
+        <button id="confirm-pool-modal" class="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors">
+          Add Selected to Tender
         </button>
       </div>
     </div>

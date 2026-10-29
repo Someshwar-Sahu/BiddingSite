@@ -19,7 +19,18 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
       ORDER BY a.created_at DESC
     `).all();
 
-    const vendors = db.prepare('SELECT * FROM vendors ORDER BY created_at DESC').all();
+    const vendors = db.prepare(`
+      SELECT v.*,
+        (SELECT GROUP_CONCAT(o.name, ', ') 
+         FROM company_vendors cv 
+         JOIN organizations o ON cv.company_id = o.id 
+         WHERE cv.vendor_id = v.id) as assigned_companies,
+        (SELECT GROUP_CONCAT(cv.company_id, ',') 
+         FROM company_vendors cv 
+         WHERE cv.vendor_id = v.id) as assigned_company_ids
+      FROM vendors v 
+      ORDER BY v.created_at DESC
+    `).all();
 
     const invites = db.prepare(`
       SELECT i.*, v.company_name, v.phone, v.email
@@ -324,3 +335,4 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
   return router;
 }
+
