@@ -8,6 +8,7 @@ const auctionId = pathParts[pathParts.length - 1] || 'NTA-EPACKPetro-07';
 
 let currentRole = 'vendor';
 let myCompanyName = '';
+let myVendorId = '';
 let lotsData = {};
 
 const socket = io();
@@ -41,6 +42,11 @@ socket.on('connect_error', (err) => {
 socket.on('room_joined', (data) => {
   currentRole = data.role;
   myCompanyName = data.companyName;
+  myVendorId = data.vendorId || '';
+
+  // Update Auction ID display in header
+  const aucDisplay = document.getElementById('auction-id-display');
+  if (aucDisplay) aucDisplay.innerText = data.auctionId || auctionId;
 
   // Seamlessly auto-redirect corporate customer observers to their dedicated executive spectator dashboard
   if (data.role === 'customer_observer') {
@@ -237,6 +243,11 @@ socket.on('bid_placed', (data) => {
 });
 
 socket.on('outbid_alert', (data) => {
+  // Only display outbid alert if this vendor was the one who got outbid
+  if (myVendorId && data.outbidVendorId && data.outbidVendorId !== myVendorId) {
+    return;
+  }
+
   playChime(320, 0.35);
   showToast(`Warning: You have been outbid on ${data.lotId}! New lowest price is ₹${data.newLowestBid.toLocaleString('en-IN')}`, 'warning');
 

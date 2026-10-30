@@ -17,6 +17,15 @@ db.prepare(`
   VALUES ('org_epack', 'Epack Petrochem Solutions Pvt Ltd', '03AAPCP3056IZE', 'procurement@epack.in', '9876543210')
 `).run();
 
+// Seed Corporate Delivery Plants / Facilities
+db.prepare(`
+  INSERT OR IGNORE INTO organization_facilities (id, org_id, facility_name, city, state, address)
+  VALUES 
+    ('fac_dahej', 'org_epack', 'Dahej Petrochem Complex', 'Dahej', 'Gujarat', 'Plot 42-45, GIDC Industrial Estate, Dahej'),
+    ('fac_bhiwadi', 'org_epack', 'Bhiwadi Packaging Hub', 'Bhiwadi', 'Rajasthan', 'Phase III, RIICO Industrial Area, Bhiwadi'),
+    ('fac_noida', 'org_epack', 'Greater Noida Processing Facility', 'Greater Noida', 'Uttar Pradesh', 'Ecotech III, Greater Noida')
+`).run();
+
 // Seed Master Vendors
 db.prepare(`
   INSERT OR IGNORE INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, status)
@@ -31,13 +40,25 @@ const startTime = new Date(now.getTime() - 5 * 60 * 1000); // Started 5 mins ago
 const endTime = new Date(now.getTime() + 40 * 60 * 1000);   // 40 mins remaining
 
 db.prepare(`
-  INSERT INTO auctions (id, title, customer_org_id, scheduled_start, scheduled_end, duration_minutes, anti_sniping_minutes, extension_step_minutes, max_buffer_minutes, current_end, status)
-  VALUES ('NTA-EPACKPetro-07', 'Epack Petrochem Disposal & Procurement Event', 'org_epack', ?, ?, 45, 2, 3, 30, ?, 'live')
+  INSERT INTO auctions (
+    id, title, customer_org_id, scheduled_start, scheduled_end, 
+    duration_minutes, anti_sniping_minutes, extension_step_minutes, 
+    max_buffer_minutes, current_end, status, category, delivery_location, 
+    special_instructions
+  )
+  VALUES (
+    'NTA-EPACKPetro-07', 'Epack Petrochem Disposal & Procurement Event', 'org_epack', ?, ?, 
+    45, 2, 3, 30, ?, 'live', 'Packaging & Petrochem', 'Bhiwadi Packaging Hub (Rajasthan)',
+    '100% within 30 days post-inspection | Within 7 business days of PO dispatch'
+  )
   ON CONFLICT(id) DO UPDATE SET
     scheduled_start = excluded.scheduled_start,
     scheduled_end = excluded.scheduled_end,
     current_end = excluded.current_end,
-    status = 'live'
+    status = 'live',
+    category = COALESCE(auctions.category, excluded.category),
+    delivery_location = COALESCE(auctions.delivery_location, excluded.delivery_location),
+    special_instructions = COALESCE(auctions.special_instructions, excluded.special_instructions)
 `).run(startTime.toISOString(), endTime.toISOString(), endTime.toISOString());
 
 // Seed Lots: Pallets & Coal
@@ -110,19 +131,22 @@ httpServer.listen(PORT, () => {
   const observerUrl = buildAccessUrl(BASE_URL, 'NTA-EPACKPetro-07', 'token_epack_spectator_obs_03', 'customer_observer');
 
   console.log('\n================================================================');
-  console.log(`🚀 NexTrade Auctions (NTA) Live on: ${BASE_URL}`);
+  console.log(`🚀 NexTrade Auctions (NTA) Live Platform: ${BASE_URL}`);
   console.log('================================================================');
-  console.log('Auction ID: NTA-EPACKPetro-07 (Status: LIVE - 40m remaining)');
-  console.log('\n🔑 1-CLICK MAGIC ACCESS LINKS (Click or Copy to Browser):');
-  console.log('\n1. 👤 Vendor A (Gold Global Fuels - L1 Bidder):');
+  console.log('Active Demo Tender: NTA-EPACKPetro-07 (Status: LIVE)');
+  console.log('\n🔒 REALM 1: OPERATIONS DESK (ADMIN)');
+  console.log(`   URL:         ${BASE_URL}/admin/login`);
+  console.log('   Credentials: admin@nextradeauctions.com / NTA_Admin_2026!');
+  console.log('\n🏢 REALM 2: CORPORATE BUYER WORKSPACE (CUSTOMER)');
+  console.log(`   Dashboard:   ${BASE_URL}/customer/dashboard`);
+  console.log(`   Login URL:   ${BASE_URL}/customer/login`);
+  console.log('   Credentials: procurement@epack.in / Epack_Buyer_2026!');
+  console.log(`   Intake Form: ${BASE_URL}/customer/request-tender (Auth Guarded)`);
+  console.log(`   Spectator:   ${observerUrl}`);
+  console.log('\n👥 REALM 3: SUPPLIER BIDDING ROOM (TOKENIZED MAGIC LINKS)');
+  console.log(`   Vendor A (Gold Global Fuels):`);
   console.log(`   👉 ${goldUrl}`);
-  console.log('\n2. 👤 Vendor B (RS Bridge Consultancy - Competing Bidder):');
+  console.log(`   Vendor B (RS Bridge Consultancy):`);
   console.log(`   👉 ${bridgeUrl}`);
-  console.log('\n3. 👁️ Customer Observer (Epack Petrochem Executive Spectator):');
-  console.log(`   👉 ${observerUrl}`);
-  console.log('\n📝 Customer Tender Intake Portal:');
-  console.log(`   👉 ${BASE_URL}/customer/request-tender`);
-  console.log('\n💼 Admin Control Room:');
-  console.log(`   👉 ${BASE_URL}/admin/auctions`);
   console.log('================================================================\n');
 });

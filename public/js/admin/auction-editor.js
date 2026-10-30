@@ -176,6 +176,28 @@ async function enterEditMode(auctionId) {
     document.getElementById('input-client').disabled = true; // Cannot switch buyer on existing tender
     document.getElementById('input-title').value = auction.title;
 
+    // Populate Category, Delivery Location, and Commercial Instructions
+    const catSelect = document.getElementById('input-category');
+    if (catSelect) {
+      const catVal = auction.category || 'General Enterprise Procurement';
+      const exists = Array.from(catSelect.options).some((o) => o.value.toLowerCase() === catVal.toLowerCase());
+      if (!exists && catVal) {
+        const opt = document.createElement('option');
+        opt.value = catVal;
+        opt.textContent = catVal;
+        catSelect.appendChild(opt);
+      }
+      catSelect.value = catVal;
+    }
+
+    if (document.getElementById('input-delivery-location')) {
+      document.getElementById('input-delivery-location').value = auction.delivery_location || '';
+    }
+
+    if (document.getElementById('input-special-instructions')) {
+      document.getElementById('input-special-instructions').value = auction.special_instructions || '';
+    }
+
     // Convert start time
     const d = new Date(auction.scheduled_start);
     const tzOffset = d.getTimezoneOffset() * 60000;
@@ -213,6 +235,40 @@ async function enterEditMode(auctionId) {
     renderAssignedVendors();
 
     await loadCompanyVendorPool(auction.customer_org_id);
+
+    // If auction is LIVE or ENDED, enforce strict lockout
+    if (auction.status === 'live' || auction.status === 'extended' || auction.status === 'ended') {
+      const isLive = auction.status === 'live' || auction.status === 'extended';
+      document.getElementById('editor-badge').innerText = isLive ? '● Live Bidding (Locked)' : 'Ended (Locked)';
+      document.getElementById('editor-badge').className = isLive
+        ? 'bg-red-100 text-red-800 text-xs font-bold px-3 py-1 rounded-full'
+        : 'bg-slate-100 text-slate-700 text-xs font-bold px-3 py-1 rounded-full';
+
+      const banner = document.createElement('div');
+      banner.id = 'live-locked-banner';
+      banner.className = 'p-4 rounded-xl text-xs flex items-center gap-3 bg-red-50 border border-red-200 text-red-900 mb-4';
+      banner.innerHTML = `
+        <span class="text-2xl">🔒</span>
+        <div>
+          <strong class="block text-sm font-bold">${isLive ? 'Auction is currently LIVE' : 'Auction has Concluded'} — Modifications Locked</strong>
+          <p class="text-[11px] text-red-700 mt-0.5">Procurement lots, reserve ceilings, decrements, and commercial rules cannot be modified while bidding is ${isLive ? 'active' : 'concluded'}. Bidding records are immutable.</p>
+        </div>
+      `;
+      document.querySelector('main > div')?.prepend(banner);
+
+      document.querySelectorAll('#auction-form input, #auction-form select').forEach((el) => {
+        el.disabled = true;
+      });
+      document.getElementById('btn-add-lot')?.classList.add('hidden');
+      document.getElementById('btn-add-custom-vendor')?.classList.add('hidden');
+      document.getElementById('btn-pool-modal')?.classList.add('hidden');
+      const submitBtn = document.querySelector('#auction-form button[type="submit"]');
+      if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.className = 'w-full py-3 bg-slate-300 text-slate-600 font-bold rounded-xl cursor-not-allowed text-xs';
+        submitBtn.innerText = '🔒 Modifications Locked on Live/Ended Auction';
+      }
+    }
   } catch (err) {
     showToast(err.message, 'error');
   }
@@ -528,6 +584,9 @@ async function handleFormSubmit(e) {
   const antiSniping = parseInt(document.getElementById('input-anti-sniping').value, 10) || 2;
   const maxBuffer = parseInt(document.getElementById('input-max-buffer').value, 10) || 30;
   const notifyVendors = document.getElementById('chk-notify-vendors')?.checked === true;
+  const category = document.getElementById('input-category')?.value || 'General Enterprise Procurement';
+  const deliveryLocation = document.getElementById('input-delivery-location')?.value?.trim() || '';
+  const specialInstructions = document.getElementById('input-special-instructions')?.value?.trim() || '';
 
   if (lots.length === 0) {
     showToast('Please add at least one procurement lot.', 'error');
@@ -579,6 +638,9 @@ async function handleFormSubmit(e) {
     duration_minutes: duration,
     anti_sniping_minutes: antiSniping,
     max_buffer_minutes: maxBuffer,
+    category,
+    delivery_location: deliveryLocation,
+    special_instructions: specialInstructions,
     lots,
     customerVendors: validCustomerVendors,
     notify_vendors: notifyVendors,

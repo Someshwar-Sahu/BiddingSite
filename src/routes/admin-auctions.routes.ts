@@ -5,6 +5,8 @@ import { AuctionRepository } from '../auction-repository.js';
 import { generateMagicToken, buildAccessUrl, buildWhatsAppShareUrl } from '../magic-link.js';
 import { computeEventOutcome, type LotSettlementInput } from '../auction-outcome.js';
 import { generateAuctionReportPdf } from '../report-generator.js';
+import { Server as SocketIOServer } from 'socket.io';
+import { createNotification } from '../notifications.js';
 
 /**
  * Robust helper to process assigned and custom vendors during auction creation and updates.
@@ -13,7 +15,7 @@ import { generateAuctionReportPdf } from '../report-generator.js';
  * links them to the corporate client in `company_vendors`,
  * and issues active Magic Link tokens in `auction_invites`.
  */
-function processAuctionVendors(
+export function processAuctionVendors(
   db: Database.Database,
   auctionId: string,
   customerOrgId: string,
@@ -125,7 +127,7 @@ function processAuctionVendors(
   }
 }
 
-export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRepository): Router {
+export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRepository, io?: SocketIOServer): Router {
   const router = Router();
 
   // 1. Overview
@@ -213,7 +215,20 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
   // 4. Create Auction with lots & assigned vendors
   router.post('/auctions', (req, res) => {
-    const { id, title, customer_org_id, scheduled_start, duration_minutes, anti_sniping_minutes, max_buffer_minutes, lots, customerVendors } = req.body;
+    const {
+      id,
+      title,
+      customer_org_id,
+      scheduled_start,
+      duration_minutes,
+      anti_sniping_minutes,
+      max_buffer_minutes,
+      category,
+      delivery_location,
+      special_instructions,
+      lots,
+      customerVendors,
+    } = req.body;
 
     if (!id || !title || !customer_org_id) {
       return res.status(400).json({ error: 'Missing required auction fields (id, title, customer_org_id).' });
@@ -225,9 +240,27 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
     const transaction = db.transaction(() => {
       db.prepare(`
-        INSERT INTO auctions (id, title, customer_org_id, scheduled_start, scheduled_end, duration_minutes, anti_sniping_minutes, extension_step_minutes, max_buffer_minutes, current_end, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 3, ?, ?, 'scheduled')
-      `).run(id, title, customer_org_id, start.toISOString(), end.toISOString(), duration, anti_sniping_minutes || 2, max_buffer_minutes || 30, end.toISOString());
+        INSERT INTO auctions (
+          id, title, customer_org_id, scheduled_start, scheduled_end, 
+          duration_minutes, anti_sniping_minutes, extension_step_minutes, 
+          max_buffer_minutes, current_end, status, category, delivery_location, 
+          special_instructions
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, 3, ?, ?, 'scheduled', ?, ?, ?)
+      `).run(
+        id,
+        title,
+        customer_org_id,
+        start.toISOString(),
+        end.toISOString(),
+        duration,
+        anti_sniping_minutes || 2,
+        max_buffer_minutes || 30,
+        end.toISOString(),
+        category || 'General Procurement',
+        delivery_location || 'Corporate Site',
+        special_instructions || 'Standard commercial settlement terms'
+      );
 
       if (Array.isArray(lots)) {
         lots.forEach((lot: any, index: number) => {
@@ -264,11 +297,32 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
   // 5. Update / Edit Auction
   router.put('/auctions/:id', (req, res) => {
     const auctionId = req.params.id;
-    const { title, scheduled_start, duration_minutes, anti_sniping_minutes, max_buffer_minutes, lots, customerVendors, notify_vendors } = req.body;
+    const {
+      title,
+      scheduled_start,
+      duration_minutes,
+      anti_sniping_minutes,
+      max_buffer_minutes,
+      category,
+      delivery_location,
+      special_instructions,
+      lots,
+      customerVendors,
+      notify_vendors,
+    } = req.body;
 
     const existing = db.prepare('SELECT status, customer_org_id FROM auctions WHERE id = ?').get(auctionId) as any;
     if (!existing) return res.status(404).json({ error: 'Auction not found.' });
-    if (existing.status === 'ended') return res.status(400).json({ error: 'Cannot edit an auction that has already ended.' });
+
+    if (existing.status === 'live' || existing.status === 'extended') {
+      return res.status(400).json({
+        error: 'Cannot edit an auction while live bidding is active. Procurement lots, reserve ceilings, and rules are locked to protect bidding integrity.',
+      });
+    }
+
+    if (existing.status === 'ended') {
+      return res.status(400).json({ error: 'Cannot edit an auction that has already ended.' });
+    }
 
     const duration = duration_minutes || 60;
     const start = new Date(scheduled_start || Date.now());
@@ -277,9 +331,25 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
     const transaction = db.transaction(() => {
       db.prepare(`
         UPDATE auctions 
-        SET title = ?, scheduled_start = ?, scheduled_end = ?, duration_minutes = ?, anti_sniping_minutes = ?, max_buffer_minutes = ?, current_end = ?
+        SET title = ?, scheduled_start = ?, scheduled_end = ?, duration_minutes = ?, 
+            anti_sniping_minutes = ?, max_buffer_minutes = ?, current_end = ?,
+            category = COALESCE(?, category),
+            delivery_location = COALESCE(?, delivery_location),
+            special_instructions = COALESCE(?, special_instructions)
         WHERE id = ?
-      `).run(title, start.toISOString(), end.toISOString(), duration, anti_sniping_minutes || 2, max_buffer_minutes || 30, end.toISOString(), auctionId);
+      `).run(
+        title,
+        start.toISOString(),
+        end.toISOString(),
+        duration,
+        anti_sniping_minutes || 2,
+        max_buffer_minutes || 30,
+        end.toISOString(),
+        category || null,
+        delivery_location || null,
+        special_instructions || null,
+        auctionId
+      );
 
       if (Array.isArray(lots)) {
         db.prepare('DELETE FROM lots WHERE auction_id = ?').run(auctionId);
@@ -308,6 +378,17 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
     try {
       transaction();
+
+      createNotification(db, io || null, {
+        recipient_role: 'customer',
+        recipient_org_id: existing.customer_org_id,
+        title: `Scheduled Tender Parameters Updated: ${auctionId}`,
+        message: `NexTrade Desk updated the scheduled parameters and specifications for ${title || auctionId}.`,
+        type: 'amendment_decision',
+        reference_id: auctionId,
+        target_url: `/customer/dashboard?auctionId=${auctionId}`,
+      });
+
       res.json({
         success: true,
         message: `Auction ${auctionId} updated successfully.`,

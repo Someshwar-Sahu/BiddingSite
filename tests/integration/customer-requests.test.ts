@@ -35,6 +35,45 @@ describe('Customer Tender Request Intake & Admin Conversion Integration', () => 
   // POSITIVE TESTS (Happy Paths)
   // ==========================================
   describe('Positive Test Cases', () => {
+    it('fetches corporate buyer profile with facilities and approved vendor pool', async () => {
+      // Seed a facility and a vendor
+      db.prepare("INSERT INTO organization_facilities VALUES ('fac_dahej', 'org_epack', 'Dahej Plant', 'Dahej', 'Gujarat', 'Plot 42', datetime('now'))").run();
+      db.prepare("INSERT INTO vendors VALUES ('vnd_gold', 'Gold Global', 'Harsh', 'gold@test.com', '9876543210', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved', datetime('now'))").run();
+      db.prepare("INSERT INTO company_vendors VALUES ('org_epack', 'vnd_gold', datetime('now'))").run();
+
+      const res = await fetch(`${baseUrl}/api/customer/profile?org=org_epack`);
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.organization.name).toBe('Epack Petrochem Solutions');
+      expect(data.facilities).toHaveLength(1);
+      expect(data.facilities[0].facility_name).toBe('Dahej Plant');
+      expect(data.vendorPool).toHaveLength(1);
+      expect(data.vendorPool[0].company_name).toBe('Gold Global');
+    });
+
+    it('allows corporate buyer to register a new plant facility', async () => {
+      const res = await fetch(`${baseUrl}/api/customer/facilities`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: 'org_epack',
+          facility_name: 'Bhiwadi Packaging Hub',
+          city: 'Bhiwadi',
+          state: 'Rajasthan',
+          address: 'RIICO Phase III',
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.success).toBe(true);
+      expect(data.facility.facility_name).toBe('Bhiwadi Packaging Hub');
+
+      const saved = db.prepare("SELECT * FROM organization_facilities WHERE facility_name = 'Bhiwadi Packaging Hub'").get() as any;
+      expect(saved).toBeTruthy();
+      expect(saved.city).toBe('Bhiwadi');
+    });
+
     it('submits a new customer tender request with multiple lots', async () => {
       const payload = {
         company_name: 'Epack Petrochem Solutions',

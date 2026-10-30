@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tender Creation Wizard - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex flex-col justify-between">
+
+  <!-- TOP ENTERPRISE HEADER -->
+  <header class="bg-[#1e2238] text-white shadow-md sticky top-0 z-40">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="bg-blue-600 text-white font-black px-2.5 py-1 rounded text-xs tracking-wider">NTA</div>
+        <div>
+          <h1 class="text-sm font-bold text-white tracking-tight flex items-center gap-2">
+            <span>Corporate Buyer Workspace</span>
+            <span class="bg-blue-900/80 text-blue-200 text-[10px] font-bold px-2 py-0.5 rounded border border-blue-700">TENDER WIZARD</span>
+          </h1>
+          <p id="top-company-badge" class="text-xs text-slate-300">Loading authenticated enterprise profile...</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 sm:gap-3 text-xs flex-wrap">
+        <!-- Live Notifications Bell & Drawer -->
+        <div id="customer-notif-container"></div>
+
+        <nav class="flex items-center gap-1 bg-slate-800/80 p-1 rounded-lg">
+          <a href="/customer/dashboard" class="px-3 py-1.5 rounded-md text-slate-300 hover:text-white hover:bg-slate-700 transition-colors">
+            📊 Overview
+          </a>
+          <a href="/customer/request-tender" class="px-3 py-1.5 rounded-md bg-blue-600 text-white font-bold shadow-sm">
+            ➕ Request Tender
+          </a>
+        </nav>
+
+        <div class="hidden sm:flex items-center gap-2 bg-slate-800/60 px-3 py-1.5 rounded-lg border border-slate-700">
+          <span class="text-slate-400">Buyer:</span>
+          <strong id="auth-company-name" class="text-white font-semibold">Epack Petrochem Solutions</strong>
+        </div>
+
+        <button id="btn-customer-logout" type="button" class="bg-slate-800 hover:bg-red-900/40 text-slate-300 hover:text-red-300 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors flex items-center gap-1.5">
+          <span>🚪</span>
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- WIZARD STEPPER BAR (PROGRESS TRACKER) -->
+  <nav class="bg-white border-b border-slate-200 shadow-xs">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+      <div class="flex items-center justify-between relative">
+        <!-- Connecting Track -->
+        <div class="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-slate-200 w-full z-0"></div>
+        <div id="progress-bar-fill" class="absolute left-0 top-1/2 -translate-y-1/2 h-1 bg-blue-600 transition-all duration-300 z-0" style="width: 0%;"></div>
+
+        <!-- Step 1 -->
+        <div class="step-indicator relative z-10 flex flex-col items-center group cursor-pointer" data-step="1">
+          <div id="step-circle-1" class="w-8 h-8 rounded-full bg-blue-600 text-white font-bold text-xs flex items-center justify-center shadow transition-all ring-4 ring-blue-100">
+            1
+          </div>
+          <span class="text-[11px] font-bold text-blue-700 mt-1.5 hidden sm:block">Scope & Plant</span>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-indicator relative z-10 flex flex-col items-center group cursor-pointer" data-step="2">
+          <div id="step-circle-2" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center shadow transition-all">
+            2
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 mt-1.5 hidden sm:block">Lot Specifications</span>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-indicator relative z-10 flex flex-col items-center group cursor-pointer" data-step="3">
+          <div id="step-circle-3" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center shadow transition-all">
+            3
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 mt-1.5 hidden sm:block">Supplier Pool</span>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step-indicator relative z-10 flex flex-col items-center group cursor-pointer" data-step="4">
+          <div id="step-circle-4" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center shadow transition-all">
+            4
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 mt-1.5 hidden sm:block">Commercial Terms</span>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="step-indicator relative z-10 flex flex-col items-center group cursor-pointer" data-step="5">
+          <div id="step-circle-5" class="w-8 h-8 rounded-full bg-slate-200 text-slate-600 font-bold text-xs flex items-center justify-center shadow transition-all">
+            5
+          </div>
+          <span class="text-[11px] font-semibold text-slate-500 mt-1.5 hidden sm:block">Executive Review</span>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- MAIN WIZARD VIEWPORT -->
+  <main class="max-w-6xl mx-auto py-8 px-4 sm:px-6 flex-1 w-full">
+
+    <form id="wizard-form" onsubmit="return false;">
+
+      <!-- ============================================================= -->
+      <!-- STEP 1: EVENT SCOPE & DELIVERY FACILITY -->
+      <!-- ============================================================= -->
+      <section id="step-pane-1" class="wizard-pane space-y-6">
+        <!-- Verified Enterprise Profile Header -->
+        <div class="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+              <h2 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Verified Corporate Client Profile</h2>
+            </div>
+            <span class="text-xs bg-emerald-50 text-emerald-700 font-bold px-2.5 py-1 rounded border border-emerald-200">
+              KYC & Tax Compliant ✅
+            </span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+            <div>
+              <span class="text-slate-400 block font-semibold">Legal Entity</span>
+              <strong id="card-company-name" class="text-slate-800 text-sm">Epack Petrochem Solutions Pvt Ltd</strong>
+            </div>
+            <div>
+              <span class="text-slate-400 block font-semibold">Registered GSTIN</span>
+              <strong id="card-gstin" class="text-slate-800 font-mono">03AAPCP3056IZE</strong>
+            </div>
+            <div>
+              <span class="text-slate-400 block font-semibold">Authorized Officer</span>
+              <strong id="card-officer" class="text-slate-800">Saurabh Verma (Procurement Head)</strong>
+            </div>
+            <div>
+              <span class="text-slate-400 block font-semibold">Contact Email & Phone</span>
+              <strong id="card-contact" class="text-slate-800">procurement@epack.in • 9876543210</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tender Parameters -->
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <div class="border-b border-slate-100 pb-3">
+            <h3 class="text-base font-bold text-slate-900">Step 1: Event Scope & Schedule</h3>
+            <p class="text-xs text-slate-500">Specify procurement title, category, target delivery plant, and event window.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+            <div class="md:col-span-2">
+              <label class="block font-bold text-slate-700 mb-1.5">Tender Title / Procurement Event *</label>
+              <input id="wizard-title" type="text" required placeholder="e.g. Q4 Plastic Granules & Industrial Packaging Sourcing" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-900" />
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">Procurement Category *</label>
+              <select id="wizard-category" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium text-slate-800">
+                <option value="Petrochemicals">Petrochemicals & Solvents</option>
+                <option value="Packaging" selected>Packaging & Pallets</option>
+                <option value="Raw Materials">Raw Materials & Minerals</option>
+                <option value="Metals & Scrap">Metals & Disposal Scrap</option>
+                <option value="Logistics">Freight & Logistics</option>
+                <option value="General">General Enterprise Procurement</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">Target Delivery Plant / Facility *</label>
+              <select id="wizard-facility" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium text-slate-800">
+                <option value="Dahej Plant, Gujarat">Dahej Petrochem Complex (Dahej, Gujarat)</option>
+                <option value="Bhiwadi Packaging Hub, Rajasthan">Bhiwadi Packaging Hub (Bhiwadi, Rajasthan)</option>
+                <option value="Greater Noida Facility, UP">Greater Noida Processing Facility (UP)</option>
+              </select>
+
+              <!-- Dynamic Custom Plant Form (Revealed when 'Other / Client Site' is selected) -->
+              <div id="wizard-custom-plant-container" class="hidden mt-3 p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5 text-xs">
+                <div class="font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>🏭</span> Specify Custom Receiving Plant
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-600 mb-1">Facility / Plant Name *</label>
+                  <input id="wizard-custom-plant-name" type="text" placeholder="e.g. Sanand Manufacturing Unit 2" class="w-full border border-slate-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">City *</label>
+                    <input id="wizard-custom-plant-city" type="text" placeholder="e.g. Ahmedabad" class="w-full border border-slate-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-semibold text-slate-600 mb-1">State *</label>
+                    <input id="wizard-custom-plant-state" type="text" placeholder="e.g. Gujarat" class="w-full border border-slate-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-blue-500" />
+                  </div>
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-600 mb-1">Full Address / Industrial Estate</label>
+                  <input id="wizard-custom-plant-address" type="text" placeholder="e.g. Plot 12, GIDC Phase II" class="w-full border border-slate-300 rounded-lg p-2 bg-white outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <label class="flex items-center gap-2 text-[11px] text-slate-600 font-medium cursor-pointer pt-1">
+                  <input id="wizard-custom-plant-save" type="checkbox" checked class="rounded text-blue-600 focus:ring-0" />
+                  <span>Save this plant to Corporate Directory for future tenders</span>
+                </label>
+              </div>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">Target Event Date & Time</label>
+              <input id="wizard-target-date" type="datetime-local" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-800" />
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">Auction Live Duration *</label>
+              <select id="wizard-duration" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium text-slate-800">
+                <option value="30">30 Minutes</option>
+                <option value="45" selected>45 Minutes (Recommended)</option>
+                <option value="60">60 Minutes</option>
+                <option value="90">90 Minutes</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button type="button" onclick="window.wizardGoTo(2)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-3 rounded-xl shadow transition-colors flex items-center gap-2">
+            <span>Next: Lot Specifications</span> <span>→</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- STEP 2: LOT SPECIFICATIONS & ECONOMICS -->
+      <!-- ============================================================= -->
+      <section id="step-pane-2" class="wizard-pane hidden space-y-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <div class="border-b border-slate-100 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Step 2: Procurement Lot Items & Ceilings</h3>
+              <p class="text-xs text-slate-500">Define material specifications, quantities, reserve ceiling prices (max acceptable), and decrements.</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button type="button" id="btn-download-sample-csv" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-2 rounded-lg border border-slate-300 transition-colors">
+                📥 Sample CSV
+              </button>
+              <button type="button" id="btn-add-lot-wizard" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2 rounded-lg shadow transition-colors flex items-center gap-1.5">
+                <span>+</span> Add Another Lot
+              </button>
+            </div>
+          </div>
+
+          <!-- Dynamic Lots Spreadsheet -->
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider border-b border-slate-200">
+                  <th class="py-3 px-3">#</th>
+                  <th class="py-3 px-3 min-w-[220px]">Product / Material Description *</th>
+                  <th class="py-3 px-3 min-w-[130px]">Grade / Spec</th>
+                  <th class="py-3 px-3 w-28 text-center">Quantity *</th>
+                  <th class="py-3 px-3 w-28">UOM *</th>
+                  <th class="py-3 px-3 w-36 text-right">Reserve Ceiling (₹) *</th>
+                  <th class="py-3 px-3 w-32 text-right">Decrement (₹) *</th>
+                  <th class="py-3 px-3 w-32 text-right">Est. Ceiling Total</th>
+                  <th class="py-3 px-3 w-16 text-center">Action</th>
+                </tr>
+              </thead>
+              <tbody id="wizard-lots-tbody" class="divide-y divide-slate-200">
+                <!-- Dynamically populated lots -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Live Budget Bar -->
+          <div class="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-md">
+            <div class="text-xs text-slate-300">
+              <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 mr-1.5"></span>
+              Live Calculation: <span id="wizard-lots-count" class="font-bold text-white">2 Lot(s)</span> defined across tender scope.
+            </div>
+            <div class="flex items-baseline gap-2">
+              <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold">Total Baseline Budget Ceiling:</span>
+              <span id="wizard-total-budget" class="text-xl font-black text-emerald-400">₹0</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button type="button" onclick="window.wizardGoTo(1)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl transition-colors">
+            ← Previous: Scope
+          </button>
+          <button type="button" onclick="window.wizardGoTo(3)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-3 rounded-xl shadow transition-colors flex items-center gap-2">
+            <span>Next: Supplier Pool</span> <span>→</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- STEP 3: SUPPLIER POOL ALLOCATION -->
+      <!-- ============================================================= -->
+      <section id="step-pane-3" class="wizard-pane hidden space-y-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Step 3: Supplier Pool & Invited Bidders</h3>
+              <p class="text-xs text-slate-500">Select suppliers from your pre-approved corporate pool or recommend custom vendors to invite.</p>
+            </div>
+            <span class="text-xs text-blue-700 font-bold bg-blue-50 px-2.5 py-1 rounded">
+              Pre-approved Pool Linked ✅
+            </span>
+          </div>
+
+          <!-- Pre-Approved Pool Checklist -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-700 uppercase tracking-wider">Your Registered Suppliers:</span>
+              <button type="button" id="btn-select-all-vendors" class="text-xs text-blue-600 hover:underline font-semibold">Select All</button>
+            </div>
+
+            <div id="vendor-pool-checklist" class="space-y-2">
+              <!-- Dynamically populated from company_vendors -->
+            </div>
+          </div>
+
+          <!-- Custom Vendors -->
+          <div class="pt-4 border-t border-slate-100 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Invite Additional Suppliers (Optional)</h4>
+                <p class="text-[11px] text-slate-500">NexTrade will issue tokenized Magic Links and perform GSTIN tax verification.</p>
+              </div>
+              <button type="button" id="btn-add-custom-vendor-row" class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs px-3 py-1.5 rounded-lg border border-slate-300 transition-colors">
+                + Add Vendor Row
+              </button>
+            </div>
+
+            <div id="custom-vendors-container" class="space-y-2.5">
+              <!-- Custom vendor inputs -->
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button type="button" onclick="window.wizardGoTo(2)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl transition-colors">
+            ← Previous: Lots
+          </button>
+          <button type="button" onclick="window.wizardGoTo(4)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-3 rounded-xl shadow transition-colors flex items-center gap-2">
+            <span>Next: Commercial Terms</span> <span>→</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- STEP 4: COMMERCIAL SETTLEMENT TERMS -->
+      <!-- ============================================================= -->
+      <section id="step-pane-4" class="wizard-pane hidden space-y-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-5">
+          <div class="border-b border-slate-100 pb-3">
+            <h3 class="text-base font-bold text-slate-900">Step 4: Commercial Terms & Quality Compliance</h3>
+            <p class="text-xs text-slate-500">Define milestone payment rules, delivery timeline, and mandatory compliance certificates.</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-5 text-sm">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">Payment Terms *</label>
+              <select id="wizard-payment-terms" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 bg-white font-medium text-slate-800">
+                <option value="100% within 30 days post-inspection" selected>100% within 30 days post-inspection</option>
+                <option value="Immediate settlement upon gate-in">Immediate settlement upon gate-in</option>
+                <option value="45 days PDC post delivery">45 days PDC post delivery</option>
+                <option value="Letter of Credit (LC at Sight)">Letter of Credit (LC at Sight)</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block font-bold text-slate-700 mb-1.5">Delivery Timeline *</label>
+              <input id="wizard-delivery-timeline" type="text" value="Within 7 business days of PO dispatch" class="w-full border border-slate-300 rounded-lg px-3.5 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 font-medium text-slate-800" />
+            </div>
+
+            <div class="md:col-span-2 space-y-2">
+              <label class="block font-bold text-slate-700">Mandatory Supplier Compliance & Documentation</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs text-slate-700">
+                <label class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 cursor-pointer">
+                  <input type="checkbox" checked class="rounded text-blue-600 focus:ring-0 compliance-check" value="Valid Active GSTIN Registration" />
+                  <span>Valid Active GSTIN Registration</span>
+                </label>
+                <label class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 cursor-pointer">
+                  <input type="checkbox" checked class="rounded text-blue-600 focus:ring-0 compliance-check" value="Batch Quality Test Certificate (COA)" />
+                  <span>Batch Quality Test Certificate (COA)</span>
+                </label>
+                <label class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 cursor-pointer">
+                  <input type="checkbox" checked class="rounded text-blue-600 focus:ring-0 compliance-check" value="Standard ISO 9001 / Manufacturer Warranty" />
+                  <span>Standard ISO 9001 / Manufacturer Warranty</span>
+                </label>
+                <label class="flex items-center gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-200 cursor-pointer">
+                  <input type="checkbox" class="rounded text-blue-600 focus:ring-0 compliance-check" value="State Pollution Control Board Clearance (Non-PCB)" />
+                  <span>State Pollution Control Board Clearance</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="md:col-span-2">
+              <label class="block font-bold text-slate-700 mb-1.5">Special Dispatch / Commercial Instructions</label>
+              <textarea id="wizard-special-notes" rows="3" placeholder="e.g. Weighbridge slips at Dahej plant will govern final billed tonnage. Standard packaging requirements apply." class="w-full border border-slate-300 rounded-lg p-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 text-slate-800"></textarea>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button type="button" onclick="window.wizardGoTo(3)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl transition-colors">
+            ← Previous: Suppliers
+          </button>
+          <button type="button" onclick="window.wizardGoTo(5)" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-6 py-3 rounded-xl shadow transition-colors flex items-center gap-2">
+            <span>Next: Executive Review</span> <span>→</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- ============================================================= -->
+      <!-- STEP 5: EXECUTIVE REVIEW & SUBMISSION -->
+      <!-- ============================================================= -->
+      <section id="step-pane-5" class="wizard-pane hidden space-y-6">
+        <div class="bg-white rounded-xl border border-slate-200 p-6 shadow-sm space-y-6">
+          <div class="border-b border-slate-100 pb-3 flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Step 5: Executive Tender Summary & Review</h3>
+              <p class="text-xs text-slate-500">Verify procurement parameters before issuing request to the NexTrade desk.</p>
+            </div>
+            <span class="text-xs font-bold bg-amber-100 text-amber-900 px-3 py-1 rounded-full border border-amber-200">
+              Ready for Submission
+            </span>
+          </div>
+
+          <!-- Review Summary Card -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+              <span class="text-slate-400 uppercase font-bold text-[10px] block">Corporate Client</span>
+              <strong id="rev-company" class="text-slate-900 text-sm block">—</strong>
+              <span id="rev-facility" class="text-slate-600 block">—</span>
+            </div>
+
+            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-1">
+              <span class="text-slate-400 uppercase font-bold text-[10px] block">Tender Event & Timing</span>
+              <strong id="rev-title" class="text-slate-900 text-sm block">—</strong>
+              <span id="rev-timing" class="text-slate-600 block">—</span>
+            </div>
+
+            <div class="bg-blue-50 p-4 rounded-xl border border-blue-200 space-y-1">
+              <span class="text-blue-600 uppercase font-bold text-[10px] block">Baseline Budget Ceiling</span>
+              <strong id="rev-budget" class="text-blue-950 text-xl font-black block">₹0</strong>
+              <span id="rev-lots-summary" class="text-blue-800 text-[11px] block">—</span>
+            </div>
+          </div>
+
+          <!-- Lots Breakdown Table -->
+          <div class="space-y-2">
+            <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wider">Lot Breakdown Specification</h4>
+            <div class="overflow-x-auto border border-slate-200 rounded-lg">
+              <table class="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr class="bg-slate-100 text-slate-700 font-bold uppercase tracking-wider">
+                    <th class="py-2.5 px-3">#</th>
+                    <th class="py-2.5 px-3">Product Name</th>
+                    <th class="py-2.5 px-3">Quantity & UOM</th>
+                    <th class="py-2.5 px-3 text-right">Reserve Ceiling</th>
+                    <th class="py-2.5 px-3 text-right">Decrement</th>
+                    <th class="py-2.5 px-3 text-right">Total Lot Ceiling</th>
+                  </tr>
+                </thead>
+                <tbody id="rev-lots-tbody" class="divide-y divide-slate-200">
+                  <!-- Populated dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Assigned Suppliers & Terms -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-1">
+              <div class="flex items-center justify-between">
+                <strong class="text-slate-900 block font-bold">Assigned Suppliers:</strong>
+                <span id="rev-suppliers-count" class="text-[10px] bg-slate-200 text-slate-700 font-bold px-1.5 py-0.5 rounded">0 Suppliers</span>
+              </div>
+              <div id="rev-suppliers-list" class="text-slate-600 leading-relaxed max-h-24 overflow-y-auto pr-1 flex flex-wrap gap-1">—</div>
+            </div>
+            <div class="bg-slate-50 p-3.5 rounded-lg border border-slate-200 space-y-1">
+              <strong class="text-slate-900 block font-bold">Settlement Terms:</strong>
+              <p id="rev-terms-summary" class="text-slate-600 leading-relaxed">—</p>
+            </div>
+          </div>
+
+          <!-- Authorization Checkbox -->
+          <div class="pt-2">
+            <label class="flex items-start gap-3 bg-amber-50/80 p-3.5 rounded-xl border border-amber-200 cursor-pointer">
+              <input id="wizard-auth-check" type="checkbox" required class="mt-0.5 rounded text-blue-600 focus:ring-0" />
+              <span class="text-xs text-amber-950 font-medium">
+                I hereby confirm as an authorized procurement officer that these tender parameters and ceiling budgets are verified for official reverse e-auction execution.
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between pt-2">
+          <button type="button" onclick="window.wizardGoTo(4)" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-xs px-5 py-3 rounded-xl transition-colors">
+            ← Previous: Terms
+          </button>
+          <button type="button" id="btn-submit-wizard" class="bg-[#1e2238] hover:bg-blue-900 text-white font-bold text-sm px-8 py-3 rounded-xl shadow-lg transition-all transform active:scale-95 flex items-center gap-2">
+            <span>🚀</span> Submit Tender Request to NexTrade Desk
+          </button>
+        </div>
+      </section>
+
+    </form>
+  </main>
+
+  <!-- SUCCESS CONFIRMATION MODAL -->
+  <div id="success-modal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl max-w-lg w-full p-6 sm:p-8 space-y-6 shadow-2xl border border-slate-200 animate-fadeIn">
+      <div class="text-center space-y-2">
+        <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center text-3xl mx-auto shadow-inner">
+          ✅
+        </div>
+        <h3 class="text-xl font-black text-slate-900 tracking-tight">Tender Request Submitted!</h3>
+        <p class="text-xs text-slate-500">Your specifications have been queued for admin verification and supplier onboarding.</p>
+      </div>
+
+      <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
+        <div class="flex justify-between">
+          <span class="text-slate-500">Tracking Reference:</span>
+          <strong id="modal-req-number" class="font-mono text-blue-600 font-black text-sm">REQ-EPACK-2026-01</strong>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Status:</span>
+          <span class="bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded text-[11px]">PENDING DESK REVIEW</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Client:</span>
+          <span id="modal-company" class="font-bold text-slate-800">—</span>
+        </div>
+        <div class="flex justify-between">
+          <span class="text-slate-500">Total Lots:</span>
+          <span id="modal-lots-count" class="font-bold text-slate-800">—</span>
+        </div>
+      </div>
+
+      <div class="text-xs text-slate-600 space-y-2">
+        <h4 class="font-bold text-slate-900">Next Steps:</h4>
+        <ul class="list-disc list-inside space-y-1 text-slate-500">
+          <li>NexTrade desk will verify lot ceilings and decrement rules.</li>
+          <li>Your approved suppliers will receive tokenized WhatsApp Magic Links.</li>
+          <li>You will be issued an <strong>Executive Spectator Link</strong> to observe real-time bids and download settlement audits.</li>
+        </ul>
+      </div>
+
+      <div class="flex items-center gap-3 pt-2">
+        <a href="/customer/dashboard" class="w-1/2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl shadow text-xs text-center transition-colors">
+          Go to Dashboard
+        </a>
+        <button id="btn-close-modal" type="button" class="w-1/2 bg-slate-200 hover:bg-slate-300 text-slate-800 font-bold py-2.5 rounded-xl text-xs transition-colors">
+          Create Another
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-500">
+    NexTrade Auctions Platform • Enterprise Industrial Reverse E-Auctions • <a href="https://www.nextradeauctions.com" target="_blank" class="text-blue-600 hover:underline">www.nextradeauctions.com</a>
+  </footer>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script type="module" src="/js/customer/request-tender.js"></script>
+</body>
+</html>
+

@@ -8,7 +8,10 @@
   },
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:client": "vite",
     "build": "tsc",
+    "build:client": "vite build",
+    "build:all": "tsc && vite build",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest"
@@ -31,9 +34,13 @@
     "@types/express": "^5.0.6",
     "@types/node": "^26.6.6",
     "@types/pdfkit": "^0.17.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.2",
     "socket.io-client": "^4.8.4",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
+    "vite": "^8.3.5",
     "vitest": "^5.0.5"
   },
   "dependencies": {
@@ -41,6 +48,9 @@
     "cors": "^2.8.6",
     "express": "^5.3.0",
     "pdfkit": "^0.20.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "react-router-dom": "^7.18.5",
     "socket.io": "^4.8.4"
   }
 }

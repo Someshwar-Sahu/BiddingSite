@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corporate Buyer Login - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex items-center justify-center p-4">
+
+  <div class="max-w-md w-full bg-white rounded-2xl border border-slate-200 shadow-xl p-8 space-y-6">
+
+    <!-- BRAND LOGO & TITLE -->
+    <div class="text-center space-y-2">
+      <div class="inline-flex items-center gap-2 bg-[#1e2238] text-white font-black px-3 py-1.5 rounded-lg text-sm tracking-wider shadow">
+        <span class="text-blue-400">NTA</span>
+      </div>
+      <h1 class="text-xl font-bold text-slate-900 tracking-tight">Corporate Buyer Workspace</h1>
+      <p class="text-xs text-slate-500">Sign in to your enterprise procurement account to configure tenders, manage delivery plants, and review live outcomes.</p>
+    </div>
+
+    <!-- ERROR ALERT -->
+    <div id="error-alert" class="hidden p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-700"></div>
+
+    <!-- LOGIN FORM -->
+    <form id="customer-login-form" class="space-y-4 text-xs">
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">Official Corporate Email</label>
+        <input 
+          id="buyer-email" 
+          type="email" 
+          required 
+          value="procurement@epack.in"
+          placeholder="procurement@yourcompany.com" 
+          class="w-full border border-slate-300 p-3 rounded-lg text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white"
+        />
+      </div>
+
+      <div>
+        <label class="font-bold text-slate-700 block mb-1">Enterprise Password / Access Key</label>
+        <input 
+          id="buyer-password" 
+          type="password" 
+          required 
+          value="Epack_Buyer_2026!"
+          placeholder="••••••••••••" 
+          class="w-full border border-slate-300 p-3 rounded-lg text-slate-900 font-medium focus:ring-2 focus:ring-blue-500 focus:outline-none bg-slate-50 focus:bg-white"
+        />
+      </div>
+
+      <button 
+        type="submit" 
+        id="btn-login"
+        class="w-full bg-[#1e2238] hover:bg-slate-800 text-white font-bold py-3 rounded-lg text-xs shadow-md transition-all flex items-center justify-center gap-2"
+      >
+        <span>🏢</span> Sign In to Corporate Procurement Desk
+      </button>
+    </form>
+
+    <!-- DEMO QUICK ACCESS -->
+    <div class="pt-4 border-t border-slate-200 space-y-3">
+      <div class="flex items-center justify-between text-[11px] text-slate-500">
+        <span>Demo Organization:</span>
+        <strong class="text-slate-700 font-semibold">Epack Petrochem Solutions</strong>
+      </div>
+
+      <button 
+        type="button" 
+        id="btn-quick-customer"
+        class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold py-2.5 rounded-lg text-xs border border-blue-200 transition-colors flex items-center justify-center gap-1.5"
+      >
+        <span>⚡</span> 1-Click Demo Corporate Buyer Sign In
+      </button>
+    </div>
+
+    <!-- TENANT ISOLATION GUARANTEE -->
+    <div class="text-center text-[11px] text-slate-400 bg-slate-50 p-3 rounded-lg border border-slate-100">
+      🔒 <strong>Enterprise Multi-Tenant Security:</strong> All plant facilities, specifications, and vendor allocations remain strictly confidential to your corporate organization.
+    </div>
+
+  </div>
+
+  <script>
+    // Immediate redirect lock: if session active, replace page without waiting
+    fetch('/api/customer/me')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.user) window.location.replace('/customer/dashboard'); })
+      .catch(() => {});
+
+    window.addEventListener('pageshow', (event) => {
+      if (event.persisted) {
+        window.location.reload();
+      }
+    });
+
+    const form = document.getElementById('customer-login-form');
+    const emailInput = document.getElementById('buyer-email');
+    const passInput = document.getElementById('buyer-password');
+    const errorAlert = document.getElementById('error-alert');
+    const submitBtn = document.getElementById('btn-login');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorAlert.classList.add('hidden');
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Authenticating corporate buyer...';
+
+      try {
+        const res = await fetch('/api/customer/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: emailInput.value,
+            password: passInput.value
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || 'Authentication failed.');
+        }
+
+        window.location.replace(data.redirect || '/customer/dashboard');
+      } catch (err) {
+        errorAlert.textContent = err.message;
+        errorAlert.classList.remove('hidden');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '🏢 Sign In to Corporate Procurement Desk';
+      }
+    });
+
+    document.getElementById('btn-quick-customer').addEventListener('click', () => {
+      emailInput.value = 'procurement@epack.in';
+      passInput.value = 'Epack_Buyer_2026!';
+      form.requestSubmit();
+    });
+  </script>
+</body>
+</html>
+

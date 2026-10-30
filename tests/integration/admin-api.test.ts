@@ -74,7 +74,7 @@ describe('Admin REST API Integration', () => {
 
     it('generates a valid vendor magic link and WhatsApp URL', async () => {
       // First create auction
-      db.prepare("INSERT INTO auctions VALUES ('PTA-01', 'Test', 'org_epack', datetime('now'), datetime('now', '+1 hour'), 60, 2, 3, 30, datetime('now', '+1 hour'), 'scheduled', datetime('now'))").run();
+      db.prepare("INSERT INTO auctions (id, title, customer_org_id, scheduled_start, scheduled_end, duration_minutes, anti_sniping_minutes, extension_step_minutes, max_buffer_minutes, current_end, status, created_at) VALUES ('PTA-01', 'Test', 'org_epack', datetime('now'), datetime('now', '+1 hour'), 60, 2, 3, 30, datetime('now', '+1 hour'), 'scheduled', datetime('now'))").run();
 
       const res = await fetch(`${baseUrl}/api/admin/auctions/PTA-01/invite`, {
         method: 'POST',

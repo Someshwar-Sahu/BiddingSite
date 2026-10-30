@@ -3,6 +3,7 @@ import Database from 'better-sqlite3';
 import { AuctionRepository } from '../auction-repository.js';
 import { verifyInviteToken, type InviteRecord } from '../magic-link.js';
 import { evaluateAntiSniping, type AuctionTimerConfig } from '../auction-timer.js';
+import { parseCookies, validateSession } from '../auth.js';
 
 export function registerAuctionSockets(
   io: SocketIOServer,
@@ -10,9 +11,98 @@ export function registerAuctionSockets(
   repo: AuctionRepository
 ): void {
   io.on('connection', (socket: Socket) => {
-    // 1. Join room and authenticate with Magic Link token
-    socket.on('join_room', (data: { auctionId: string; token: string }) => {
+    // Strictly isolate notification subscriptions based on the declared realm of the socket
+    const applyNotificationAuth = (requestedRealm?: string) => {
       try {
+        const cookies = parseCookies(socket.handshake.headers.cookie);
+        const realm =
+          requestedRealm ||
+          (socket.handshake.auth?.realm as string) ||
+          (socket.handshake.query?.realm as string);
+
+        // Always remove socket from all privileged rooms before re-authorizing
+        socket.leave('role:admin');
+        socket.leave('role:customer');
+
+        if (realm === 'admin') {
+          const adminSession = validateSession(db, cookies['nta_admin_session'], 'admin');
+          if (adminSession) {
+            socket.join('role:admin');
+          }
+        } else if (realm === 'customer') {
+          const custSession = validateSession(db, cookies['nta_customer_session'], 'customer');
+          if (custSession && custSession.organizationId) {
+            socket.join(`org:${custSession.organizationId}`);
+            socket.join('role:customer');
+          }
+        } else if (realm === 'vendor') {
+          // Future vendor realm isolation: never join admin or corporate buyer rooms
+        }
+      } catch (e) {}
+    };
+
+    // Apply authorization upon connection based on handshake auth
+    applyNotificationAuth();
+
+    // Client widget explicitly declares and authenticates realm
+    socket.on('authenticate_notifications', (data: { realm: string }) => {
+      applyNotificationAuth(data?.realm);
+    });
+
+    socket.on('disconnect_notifications', () => {
+      socket.leave('role:admin');
+      socket.leave('role:customer');
+    });
+
+    // 1. Join room and authenticate with Magic Link token or active session cookie
+    socket.on('join_room', (data: { auctionId: string; token?: string }) => {
+      try {
+        // Direct session authentication for Corporate Buyer or Operations Lead
+        if (!data.token) {
+          const cookies = parseCookies(socket.handshake.headers.cookie);
+          const custSession = validateSession(db, cookies['nta_customer_session']);
+          const adminSession = validateSession(db, cookies['nta_admin_session']);
+
+          if (custSession && custSession.role === 'customer') {
+            const auc = db.prepare('SELECT a.*, o.name as org_name FROM auctions a JOIN organizations o ON a.customer_org_id = o.id WHERE a.id = ?').get(data.auctionId) as any;
+            if (auc && auc.customer_org_id === custSession.organizationId) {
+              socket.join(`auction:${data.auctionId}`);
+              socket.data = {
+                role: 'customer_observer',
+                auctionId: data.auctionId,
+                companyName: `${auc.org_name} (Observer)`,
+              };
+              const lots = repo.getLotsForAuction(data.auctionId);
+              return socket.emit('room_joined', {
+                role: 'customer_observer',
+                companyName: `${auc.org_name} (Observer)`,
+                lots,
+                status: auc.status,
+              });
+            }
+          } else if (adminSession && adminSession.role === 'admin') {
+            socket.join(`auction:${data.auctionId}`);
+            socket.data = {
+              role: 'customer_observer',
+              auctionId: data.auctionId,
+              companyName: 'NTA Operations (Spectator)',
+            };
+            const auc = db.prepare('SELECT * FROM auctions WHERE id = ?').get(data.auctionId) as any;
+            const lots = repo.getLotsForAuction(data.auctionId);
+            return socket.emit('room_joined', {
+              role: 'customer_observer',
+              companyName: 'NTA Operations (Spectator)',
+              lots,
+              status: auc?.status || 'live',
+            });
+          }
+
+          return socket.emit('error_message', {
+            code: 'INVALID_TOKEN',
+            message: 'Authentication token or active buyer session required to view this auction room.',
+          });
+        }
+
         const invite = db
           .prepare(`
             SELECT i.*, v.company_name as vendorCompanyName, v.status as vendorStatus 
@@ -78,6 +168,7 @@ export function registerAuctionSockets(
         socket.emit('room_joined', {
           auctionId: data.auctionId,
           role: auth.role,
+          vendorId: invite.vendor_id,
           companyName: socket.data.companyName,
           status: auction?.status || 'scheduled',
           lots,

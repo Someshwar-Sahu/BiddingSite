@@ -61,11 +61,7 @@ async function loadInitialRoomState() {
 // --- 2. WEBSOCKET REAL-TIME CONNECTION ---
 function connectWebSocket() {
   socket.on('connect', () => {
-    if (!token) {
-      showToast('Missing access key in URL. Please open this link with your valid Observer Magic Link.', 'error');
-      return;
-    }
-    socket.emit('join_room', { auctionId, token });
+    socket.emit('join_room', { auctionId, token: token || undefined });
   });
 
   socket.on('connect_error', (err) => {
@@ -185,18 +181,31 @@ function updateLotRow(lot) {
   const row = document.getElementById(`observer-row-${lot.id}`);
   if (!row) return;
 
-  const lowestText = lot.current_lowest_bid
-    ? `₹${lot.current_lowest_bid.toLocaleString('en-IN')}`
-    : '<span class="text-slate-400">Awaiting Bid</span>';
+  const isAuctionEnded = currentAuctionStatus === 'ended';
 
-  const supplierText = lot.current_l1_vendor_name
-    ? `<span class="font-bold text-slate-800">${lot.current_l1_vendor_name}</span>`
-    : '<span class="text-slate-400 italic">None</span>';
-
+  let lowestText = '';
+  let supplierText = '';
   let lotSavings = 0;
-  if (lot.current_lowest_bid && lot.current_lowest_bid < lot.reserve_price) {
-    lotSavings = (lot.reserve_price - lot.current_lowest_bid) * lot.quantity;
+
+  if (lot.current_lowest_bid) {
+    lowestText = `₹${lot.current_lowest_bid.toLocaleString('en-IN')}`;
+    supplierText = `<span class="font-bold text-slate-800">${lot.current_l1_vendor_name || 'L1 Winning Bidder'}</span>`;
+    if (lot.current_lowest_bid < lot.reserve_price) {
+      lotSavings = (lot.reserve_price - lot.current_lowest_bid) * lot.quantity;
+    }
+  } else {
+    if (isAuctionEnded) {
+      lowestText = '<span class="text-slate-500 font-bold text-xs bg-slate-100 px-3 py-1 rounded-full border border-slate-200">Unbid / No Award</span>';
+      supplierText = '<span class="text-slate-400 italic">Unallocated</span>';
+    } else {
+      lowestText = '<span class="text-slate-400">Awaiting Bid</span>';
+      supplierText = '<span class="text-slate-400 italic">None</span>';
+    }
   }
+
+  const savingsDisplay = lot.current_lowest_bid
+    ? (lotSavings > 0 ? `+ ₹${lotSavings.toLocaleString('en-IN')}` : '₹0')
+    : (isAuctionEnded ? '<span class="text-slate-400 font-normal">₹0 (Unawarded)</span>' : '₹0');
 
   row.innerHTML = `
     <td class="p-3.5">
@@ -213,7 +222,7 @@ function updateLotRow(lot) {
     </td>
 
     <td class="p-3.5 text-center">
-      <span id="lowest-pill-${lot.id}" class="bg-[#1e2238] text-white font-mono font-bold px-3.5 py-1.5 rounded-full text-xs inline-block transition-all duration-300">
+      <span id="lowest-pill-${lot.id}" class="${lot.current_lowest_bid ? 'bg-[#1e2238] text-white font-mono font-bold px-3.5 py-1.5 rounded-full text-xs inline-block transition-all duration-300' : ''}">
         ${lowestText}
       </span>
     </td>
@@ -223,7 +232,7 @@ function updateLotRow(lot) {
     </td>
 
     <td class="p-3.5 text-right font-mono font-bold ${lotSavings > 0 ? 'text-emerald-600' : 'text-slate-400'}">
-      ${lotSavings > 0 ? `+ ₹${lotSavings.toLocaleString('en-IN')}` : '₹0'}
+      ${savingsDisplay}
     </td>
   `;
 
@@ -299,6 +308,8 @@ function recalculateKPIs() {
   let totalReserveBudget = 0;
   let totalCommittedSpend = 0;
   let totalSavings = 0;
+  let awardedBaseline = 0;
+  let unallocatedReserve = 0;
 
   Object.values(lotsData).forEach((lot) => {
     const baseline = lot.reserve_price * lot.quantity;
@@ -307,27 +318,39 @@ function recalculateKPIs() {
     if (lot.current_lowest_bid) {
       const currentSpend = lot.current_lowest_bid * lot.quantity;
       totalCommittedSpend += currentSpend;
+      awardedBaseline += baseline;
       if (lot.current_lowest_bid < lot.reserve_price) {
         totalSavings += baseline - currentSpend;
       }
     } else {
-      totalCommittedSpend += baseline;
+      unallocatedReserve += baseline;
+      // In professional procurement: unbid lots are NOT committed spend!
     }
   });
 
-  const savingsPct = totalReserveBudget > 0 ? ((totalSavings / totalReserveBudget) * 100).toFixed(1) : '0.0';
+  const savingsBase = awardedBaseline > 0 ? awardedBaseline : totalReserveBudget;
+  const savingsPct = savingsBase > 0 ? ((totalSavings / savingsBase) * 100).toFixed(1) : '0.0';
 
   const savingsEl = document.getElementById('kpi-total-savings');
   const savingsPctEl = document.getElementById('kpi-savings-pct');
   const spendEl = document.getElementById('kpi-current-spend');
   const budgetEl = document.getElementById('kpi-baseline-budget');
   const bidsCountEl = document.getElementById('kpi-total-bids');
+  const spendSubtext = document.getElementById('kpi-spend-subtext');
 
   if (savingsEl) savingsEl.innerText = `₹${totalSavings.toLocaleString('en-IN')}`;
   if (savingsPctEl) savingsPctEl.innerText = `${savingsPct}% Savings`;
   if (spendEl) spendEl.innerText = `₹${totalCommittedSpend.toLocaleString('en-IN')}`;
   if (budgetEl) budgetEl.innerText = `₹${totalReserveBudget.toLocaleString('en-IN')}`;
   if (bidsCountEl) bidsCountEl.innerText = totalBidsCount;
+
+  if (spendSubtext) {
+    if (unallocatedReserve > 0 && currentAuctionStatus === 'ended') {
+      spendSubtext.innerHTML = `L1 awarded liability <span class="text-amber-700 font-semibold">(₹${unallocatedReserve.toLocaleString('en-IN')} unallocated)</span>`;
+    } else {
+      spendSubtext.innerText = 'Total payable across leading bids';
+    }
+  }
 }
 
 function updateStatusBadge(status) {
@@ -356,6 +379,9 @@ function updateStatusBadge(status) {
       clockContainer.className = 'bg-slate-800 text-slate-300 font-mono font-bold px-4 py-1.5 rounded-lg text-sm border border-slate-700 flex items-center gap-1.5';
     }
     showSettlementBanner();
+    // Re-render lots to immediately update unbid badges
+    Object.values(lotsData).forEach(updateLotRow);
+    recalculateKPIs();
   } else {
     if (clockContainer) {
       clockContainer.className = 'bg-red-600/90 text-white font-mono font-bold px-4 py-1.5 rounded-lg text-sm shadow flex items-center gap-1.5';

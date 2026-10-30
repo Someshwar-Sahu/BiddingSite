@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tender Audit & Settlement Console - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex flex-col justify-between">
+
+  <!-- TOP ENTERPRISE HEADER -->
+  <header class="bg-[#1e2238] text-white shadow-md sticky top-0 z-40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3.5 flex flex-col md:flex-row md:items-center justify-between gap-3">
+      
+      <!-- Brand & Title -->
+      <div class="flex items-center gap-3">
+        <a href="/customer/dashboard" class="flex items-center gap-2 hover:opacity-90 transition-opacity">
+          <div class="bg-blue-600 text-white font-black px-2.5 py-1 rounded text-xs tracking-wider">NTA</div>
+          <span class="text-sm font-bold text-white tracking-tight">NexTrade <span class="text-blue-400 font-normal">Auctions</span></span>
+        </a>
+        <span class="text-slate-500">/</span>
+        <span class="text-xs font-semibold text-slate-300">Tender Audit Room</span>
+      </div>
+
+      <!-- Action & Navigation -->
+      <div class="flex items-center gap-3 text-xs">
+        <a href="/customer/dashboard" class="text-slate-300 hover:text-white transition-colors flex items-center gap-1">
+          <span>&larr;</span> Back to Dashboard
+        </a>
+        <button id="btn-customer-logout" type="button" class="bg-slate-800 hover:bg-red-900/40 text-slate-300 hover:text-red-300 px-3 py-1.5 rounded-lg border border-slate-700 transition-colors">
+          Sign Out
+        </button>
+      </div>
+
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 space-y-6 flex-1">
+
+    <!-- AUCTION OVERVIEW BANNER -->
+    <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+        <div>
+          <div class="flex items-center gap-2">
+            <span id="detail-auction-id" class="font-mono text-sm font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded">Loading...</span>
+            <span id="detail-status-badge" class="text-[11px] font-bold px-2.5 py-0.5 rounded-full uppercase bg-slate-100 text-slate-700 border border-slate-200">
+              Loading...
+            </span>
+            <span id="detail-category-badge" class="text-[11px] font-medium text-slate-500 bg-slate-50 px-2 py-0.5 rounded">
+              General Procurement
+            </span>
+          </div>
+          <h2 id="detail-auction-title" class="text-xl font-bold text-slate-900 mt-1.5">Loading Tender Title...</h2>
+          <p id="detail-auction-subtitle" class="text-xs text-slate-500 mt-0.5">Corporate Buyer: Loading...</p>
+        </div>
+
+        <!-- Quick Primary Action -->
+        <div id="detail-header-actions" class="flex items-center gap-2">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- Event Parameters Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+        <div class="p-3 bg-slate-50 rounded-lg">
+          <span class="text-slate-400 text-[10px] font-bold uppercase block">Delivery Facility</span>
+          <strong id="detail-facility" class="text-slate-800">Loading...</strong>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-lg">
+          <span class="text-slate-400 text-[10px] font-bold uppercase block">Commercial Terms</span>
+          <strong id="detail-terms" class="text-slate-800">Standard Settlement</strong>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-lg">
+          <span class="text-slate-400 text-[10px] font-bold uppercase block">Scheduled Window</span>
+          <strong id="detail-timing" class="text-slate-800 font-mono">Loading...</strong>
+        </div>
+        <div class="p-3 bg-slate-50 rounded-lg">
+          <span class="text-slate-400 text-[10px] font-bold uppercase block">Event Duration</span>
+          <strong id="detail-duration" class="text-slate-800">60 Minutes</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- METRICS CARDS ROW -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Committed Procurement Spend</span>
+        <span id="metric-committed-spend" class="text-2xl font-black text-slate-900">₹0</span>
+        <p class="text-[11px] text-slate-400">Total payable across leading bids</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Baseline Reserve Ceiling</span>
+        <span id="metric-baseline-reserve" class="text-2xl font-black text-slate-900">₹0</span>
+        <p class="text-[11px] text-slate-400">Total authorized reserve budget</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Total Direct Savings</span>
+        <div class="flex items-baseline gap-2">
+          <span id="metric-total-savings" class="text-2xl font-black text-emerald-600">₹0</span>
+          <span id="metric-savings-pct" class="text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">0.0%</span>
+        </div>
+        <p class="text-[11px] text-slate-400">Calculated vs baseline reserve ceiling</p>
+      </div>
+
+      <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-1">
+        <span class="text-[11px] font-bold uppercase tracking-wider text-slate-500 block">Bidding Activity</span>
+        <div class="flex items-baseline gap-2">
+          <span id="metric-bids-count" class="text-2xl font-black text-blue-600">0</span>
+          <span class="text-xs text-slate-500 font-medium">Bids Logged</span>
+        </div>
+        <p id="metric-suppliers-count" class="text-[11px] text-slate-400">0 invited suppliers</p>
+      </div>
+    </div>
+
+    <!-- MAIN TWO-COLUMN WORKSPACE -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- LEFT 2 COLS: LOTS SETTLEMENT & BID AUDIT TRAIL -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- 1. LOT-BY-LOT SETTLEMENT BREAKDOWN -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Procurement Items & Lot Awards</h3>
+              <p class="text-xs text-slate-500">Item specifications, reserve price ceilings, winning suppliers, and lot savings.</p>
+            </div>
+            <span id="lots-count-badge" class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded-full">0 Lots</span>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
+                <tr>
+                  <th class="p-3.5">Product Lot</th>
+                  <th class="p-3.5">Quantity & UOM</th>
+                  <th class="p-3.5">Reserve Ceiling</th>
+                  <th class="p-3.5">Winning L1 Bid</th>
+                  <th class="p-3.5">Awarded Supplier</th>
+                  <th class="p-3.5 text-right">Lot Savings</th>
+                </tr>
+              </thead>
+              <tbody id="lots-tbody" class="divide-y divide-slate-100 font-medium">
+                <tr><td colspan="6" class="p-8 text-center text-slate-400">Loading lots...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2. FULL CHRONOLOGICAL BID AUDIT STREAM -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          <div class="p-5 border-b border-slate-100 flex items-center justify-between">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Chronological Bidding Audit Trail</h3>
+              <p class="text-xs text-slate-500">Immutable timestamped stream of all competitive price drops logged during the auction.</p>
+            </div>
+            <span id="bids-badge" class="bg-slate-100 text-slate-700 text-xs font-bold px-2.5 py-0.5 rounded-full">0 Bids Logged</span>
+          </div>
+
+          <div class="overflow-x-auto max-h-96 overflow-y-auto">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 sticky top-0">
+                <tr>
+                  <th class="p-3.5">Timestamp</th>
+                  <th class="p-3.5">Product Lot</th>
+                  <th class="p-3.5">Supplier Name</th>
+                  <th class="p-3.5 text-right">Unit Bid</th>
+                  <th class="p-3.5 text-center">Status</th>
+                </tr>
+              </thead>
+              <tbody id="bids-tbody" class="divide-y divide-slate-100 font-mono text-[11px]">
+                <tr><td colspan="5" class="p-8 text-center text-slate-400 font-sans">Loading bids...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT 1 COL: PARTICIPATING SUPPLIERS & ACTIONS -->
+      <div class="space-y-6">
+
+        <!-- 1. OFFICIAL SETTLEMENT AUDIT REPORT -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div class="pb-3 border-b border-slate-100">
+            <h4 class="text-sm font-bold text-slate-900">Official Settlement Package</h4>
+            <p class="text-[11px] text-slate-500">Government & audit compliant 6-page summary document.</p>
+          </div>
+
+          <p class="text-xs text-slate-600 leading-relaxed">
+            Contains cryptographic bid logs, participant registers, award letters, and signed procurement outcome summaries.
+          </p>
+
+          <a id="btn-download-pdf" href="#" target="_blank" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-xs transition-colors flex items-center justify-center gap-2 shadow-sm">
+            <span>📄</span> Download Settlement Audit PDF
+          </a>
+        </div>
+
+        <!-- 2. PARTICIPATING SUPPLIER ROSTER -->
+        <div class="bg-white rounded-xl border border-slate-200 shadow-sm p-5 space-y-4">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-100">
+            <div>
+              <h4 class="text-sm font-bold text-slate-900">Invited Supplier Pool</h4>
+              <p class="text-[11px] text-slate-500">Bidders authorized for this private tender.</p>
+            </div>
+            <span id="suppliers-count-badge" class="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded">0 Vetted</span>
+          </div>
+
+          <div id="invited-suppliers-list" class="space-y-2 text-xs max-h-72 overflow-y-auto pr-1">
+            <p class="text-slate-400 text-center py-4">Loading suppliers...</p>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <footer class="bg-white border-t border-slate-200 py-4 text-center text-xs text-slate-400">
+    NexTrade Auctions (NTA) • Industrial Reverse Auction Platform • Tender Settlement Room
+  </footer>
+
+  <script type="module" src="/js/customer/auction-detail.js"></script>
+</body>
+</html>
+

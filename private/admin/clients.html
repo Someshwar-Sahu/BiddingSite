@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Corporate Clients - NexTrade Auctions</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800">
+
+  <!-- TOP SHARED NAV -->
+  <header id="admin-header" class="bg-[#1e2238] py-4 shadow-md sticky top-0 z-40"></header>
+
+  <main class="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 space-y-6">
+
+    <!-- HEADER -->
+    <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-xl font-bold text-slate-900">Corporate Clients (Buyers)</h1>
+        <p class="text-xs text-slate-500 mt-0.5">Manage enterprises running tenders and curate their exclusive vendor pools.</p>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- ADD CLIENT FORM -->
+      <div class="bg-white p-6 rounded-xl border border-slate-200 shadow-sm h-fit space-y-4">
+        <div class="pb-3 border-b border-slate-100">
+          <h2 class="font-bold text-sm text-slate-900">Add Corporate Buyer</h2>
+          <p class="text-[11px] text-slate-500">Register a new enterprise client to host auctions.</p>
+        </div>
+
+        <form id="add-client-form" class="space-y-3.5 text-xs">
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Company Legal Name</label>
+            <input id="client-name" type="text" placeholder="e.g. Epack Petrochem Ltd" required class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 focus:bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Short Code (for Auction IDs)</label>
+            <input id="client-code" type="text" placeholder="e.g. EPACK" required class="w-full border border-slate-300 p-2 rounded-lg uppercase font-mono font-bold bg-slate-50 focus:bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">GSTIN</label>
+            <input id="client-gstin" type="text" placeholder="e.g. 03AAPCP3056IZE" class="w-full border border-slate-300 p-2 rounded-lg font-mono uppercase bg-slate-50 focus:bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Procurement Head Email</label>
+            <input id="client-email" type="email" placeholder="procurement@client.com" required class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 focus:bg-white" />
+          </div>
+
+          <div>
+            <label class="font-bold text-slate-700 block mb-1">Contact Phone</label>
+            <input id="client-phone" type="text" placeholder="e.g. 9876543210" class="w-full border border-slate-300 p-2 rounded-lg bg-slate-50 focus:bg-white font-mono" />
+          </div>
+
+          <button type="submit" class="w-full bg-[#1e2238] hover:bg-slate-800 text-white font-bold py-2.5 rounded-lg text-xs shadow transition-colors">
+            Register Corporate Buyer
+          </button>
+        </form>
+      </div>
+
+      <!-- CLIENTS LIST -->
+      <div class="lg:col-span-2 bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div class="pb-3 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h2 class="font-bold text-sm text-slate-900">Registered Client Organizations</h2>
+            <p class="text-[11px] text-slate-500">Each organization maintains its own private vendor repository.</p>
+          </div>
+          <span id="clients-count-badge" class="bg-blue-100 text-blue-800 font-bold text-[11px] px-2.5 py-0.5 rounded-full">0 Clients</span>
+        </div>
+
+        <div id="clients-list" class="space-y-3 text-xs">
+          <p class="text-slate-400 text-center py-6">Loading client organizations...</p>
+        </div>
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- MODAL: CLIENT'S VENDOR POOL MANAGER -->
+  <div id="client-pool-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-xl shadow-2xl max-w-2xl w-full p-6 space-y-5 max-h-[90vh] overflow-y-auto">
+      <div class="flex items-center justify-between pb-3 border-b border-slate-200">
+        <div>
+          <h3 id="modal-company-name" class="text-base font-bold text-slate-900">Company Vendor Pool</h3>
+          <p class="text-xs text-slate-500">Manage approved suppliers authorized for this buyer's tenders.</p>
+        </div>
+        <button id="close-pool-modal-btn" class="text-slate-400 hover:text-slate-600 font-bold text-lg">✕</button>
+      </div>
+
+      <!-- 1. QUICK ADD FROM MASTER DIRECTORY -->
+      <div class="bg-blue-50 border border-blue-200 p-3.5 rounded-xl space-y-2 text-xs">
+        <span class="font-bold text-blue-900 block text-[11px] uppercase tracking-wider">⚡ Link Existing Master Supplier to this Buyer</span>
+        <div class="flex items-center gap-2">
+          <select id="select-master-vendor" class="flex-1 border border-slate-300 p-2 rounded-lg bg-white text-xs font-medium">
+            <option value="">Loading master suppliers...</option>
+          </select>
+          <button type="button" id="btn-link-master-vendor" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg whitespace-nowrap shadow-sm transition-colors">
+            + Link to Pool
+          </button>
+        </div>
+      </div>
+
+      <!-- 2. CURRENT APPROVED POOL VENDORS -->
+      <div class="space-y-2">
+        <div class="flex items-center justify-between pb-1 border-b border-slate-100">
+          <h4 class="font-bold text-xs text-slate-800">Approved Suppliers in this Buyer's Pool</h4>
+          <span id="pool-count-badge" class="text-[11px] text-slate-500">0 suppliers</span>
+        </div>
+        <div id="company-vendors-list" class="space-y-2 text-xs max-h-52 overflow-y-auto pr-1">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- 3. ADD BRAND NEW SUPPLIER FORM -->
+      <div class="pt-2 border-t border-slate-200">
+        <details class="group">
+          <summary class="font-bold text-slate-700 text-xs cursor-pointer select-none flex items-center justify-between p-2 rounded hover:bg-slate-50">
+            <span>+ Or Register a Brand New Supplier for this Client</span>
+            <span class="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+          </summary>
+          <form id="add-pool-vendor-form" class="mt-3 bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input id="pool-vendor-name" type="text" placeholder="Vendor Company Name" required class="border border-slate-300 p-2 rounded-lg bg-white" />
+              <input id="pool-vendor-email" type="email" placeholder="vendor@procure.com" required class="border border-slate-300 p-2 rounded-lg bg-white" />
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <input id="pool-vendor-contact" type="text" placeholder="Contact Person" class="border border-slate-300 p-2 rounded-lg bg-white" />
+              <input id="pool-vendor-phone" type="text" placeholder="Phone (WhatsApp)" class="border border-slate-300 p-2 rounded-lg bg-white font-mono" />
+              <input id="pool-vendor-gstin" type="text" placeholder="GSTIN (Optional)" class="border border-slate-300 p-2 rounded-lg bg-white uppercase font-mono" />
+            </div>
+            <div class="flex justify-end">
+              <button type="submit" class="bg-[#1e2238] hover:bg-slate-800 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors">
+                Register & Add to Pool
+              </button>
+            </div>
+          </form>
+        </details>
+      </div>
+
+      <div class="pt-3 border-t border-slate-100 flex justify-end">
+        <button id="close-pool-footer-btn" class="px-5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-lg transition-colors">
+          Done
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/js/admin/clients.js"></script>
+</body>
+</html>
+

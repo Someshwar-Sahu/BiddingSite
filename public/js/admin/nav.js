@@ -1,3 +1,5 @@
+import { initNotificationWidget, disconnectNotificationWidget } from '../notifications-widget.js';
+
 /**
  * Shared Admin Top Navigation Bar
  * Dynamically rendered to ensure consistent UI across all admin pages.
@@ -38,11 +40,32 @@ export function renderAdminNav(activeKey) {
           .join('')}
       </nav>
 
-      <div class="hidden sm:flex items-center gap-2 text-xs text-slate-300">
-        <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-        <span>Railway Node Active</span>
+      <div class="flex items-center gap-3 text-xs text-slate-300">
+        <!-- Live Notifications Bell & Drawer -->
+        <div id="admin-notif-container"></div>
+
+        <div class="hidden sm:flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>NTA Desk</span>
+        </div>
+        <button id="admin-logout-btn" type="button" class="bg-slate-700/80 hover:bg-red-600/80 text-white font-bold px-3 py-1.5 rounded-md transition-colors flex items-center gap-1">
+          <span>🚪</span> Sign Out
+        </button>
       </div>
     </div>
   `;
+
+  // Initialize persistent notifications drawer strictly in admin desk realm
+  initNotificationWidget('admin-notif-container', { realm: 'admin' });
+
+  document.getElementById('admin-logout-btn')?.addEventListener('click', async () => {
+    try {
+      disconnectNotificationWidget();
+      await fetch('/api/admin/logout', { method: 'POST' });
+      window.location.href = '/admin/login';
+    } catch (e) {
+      window.location.href = '/admin/login';
+    }
+  });
 }
 

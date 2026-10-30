@@ -22,7 +22,11 @@ describe('Real-Time WebSocket Auction Server', () => {
     db.prepare("INSERT INTO vendors VALUES ('vnd_bridge', 'RS Bridge', 'Rahul', 'bridge@test.com', '9876543211', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved', datetime('now'))").run();
 
     db.prepare(`
-      INSERT INTO auctions VALUES (
+      INSERT INTO auctions (
+        id, title, customer_org_id, scheduled_start, scheduled_end, 
+        duration_minutes, anti_sniping_minutes, extension_step_minutes, 
+        max_buffer_minutes, current_end, status, created_at
+      ) VALUES (
         'PTA-EPACKPetro-07', 'Epack Procurement', 'org_epack', 
         datetime('now', '-10 minutes'), datetime('now', '+50 minutes'), 60, 2, 3, 30, 
         datetime('now', '+50 minutes'), 'live', datetime('now')
