@@ -136,3 +136,4 @@ export const AddFacilityModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }
     </div>
   );
 };
+

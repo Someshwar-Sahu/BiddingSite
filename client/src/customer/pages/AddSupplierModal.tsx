@@ -162,3 +162,4 @@ export const AddSupplierModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }
     </div>
   );
 };
+

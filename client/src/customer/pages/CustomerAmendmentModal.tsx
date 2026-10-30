@@ -305,3 +305,4 @@ export const CustomerAmendmentModal: React.FC<Props> = ({ auction, facilities, o
     </div>
   );
 };
+
