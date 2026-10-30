@@ -21,12 +21,12 @@ export function initializeDatabase(dbPath: string = ':memory:'): Database.Databa
     CREATE TABLE IF NOT EXISTS vendors (
       id TEXT PRIMARY KEY,
       company_name TEXT NOT NULL,
-      contact_person TEXT NOT NULL,
+      contact_person TEXT NOT NULL DEFAULT 'Representative',
       email TEXT UNIQUE NOT NULL,
-      phone TEXT NOT NULL,
+      phone TEXT NOT NULL DEFAULT 'N/A',
       gstin TEXT,
       pan TEXT,
-      status TEXT CHECK(status IN ('unregistered', 'pending_approval', 'approved', 'blacklisted')) DEFAULT 'unregistered',
+      status TEXT CHECK(status IN ('unregistered', 'pending_approval', 'approved', 'blacklisted')) DEFAULT 'approved',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 

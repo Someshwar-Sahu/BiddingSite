@@ -6,6 +6,125 @@ import { generateMagicToken, buildAccessUrl, buildWhatsAppShareUrl } from '../ma
 import { computeEventOutcome, type LotSettlementInput } from '../auction-outcome.js';
 import { generateAuctionReportPdf } from '../report-generator.js';
 
+/**
+ * Robust helper to process assigned and custom vendors during auction creation and updates.
+ * Guarantees that less input or partial fields never violate DB constraints,
+ * always adds new custom vendors into the master `vendors` table,
+ * links them to the corporate client in `company_vendors`,
+ * and issues active Magic Link tokens in `auction_invites`.
+ */
+function processAuctionVendors(
+  db: Database.Database,
+  auctionId: string,
+  customerOrgId: string,
+  customerVendors: any[]
+): void {
+  if (!Array.isArray(customerVendors)) return;
+
+  for (const cv of customerVendors) {
+    if (!cv) continue;
+
+    // Sanitize string inputs
+    const rawCompany = typeof cv.company_name === 'string' ? cv.company_name.trim() : '';
+    const rawEmail = typeof cv.email === 'string' ? cv.email.trim().toLowerCase() : '';
+    const rawPhone = typeof cv.phone === 'string' ? cv.phone.trim() : '';
+    const rawContact = typeof cv.contact_person === 'string' ? cv.contact_person.trim() : '';
+    const rawGstin = typeof cv.gstin === 'string' ? cv.gstin.trim() : null;
+    const rawPan = typeof cv.pan === 'string' ? cv.pan.trim() : null;
+
+    // Skip if row is completely empty
+    if (!rawCompany && !rawEmail && !rawPhone) {
+      continue;
+    }
+
+    // Gracefully handle partial/less input:
+    // 1. Email (must satisfy NOT NULL & UNIQUE in vendors table)
+    let email = rawEmail;
+    if (!email) {
+      const cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+      const cleanName = rawCompany.toLowerCase().replace(/[^a-z0-9]/g, '_');
+      if (cleanPhone) {
+        email = `vendor_${cleanPhone}@vendor.nextradeauctions.com`;
+      } else if (cleanName) {
+        email = `${cleanName}@vendor.nextradeauctions.com`;
+      } else {
+        email = `vendor_${Date.now()}_${Math.random().toString(36).substring(2, 6)}@vendor.nextradeauctions.com`;
+      }
+    }
+
+    // 2. Company Name (must satisfy NOT NULL)
+    const companyName = rawCompany || email.split('@')[0].toUpperCase();
+
+    // 3. Contact Person (must satisfy NOT NULL)
+    const contactPerson = rawContact || 'Representative';
+
+    // 4. Phone (must satisfy NOT NULL)
+    const phone = rawPhone || 'N/A';
+
+    // Check if vendor already exists by ID or email (case-insensitive)
+    let vendor: any = null;
+    if (cv.vendor_id || cv.id) {
+      vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(cv.vendor_id || cv.id);
+    }
+    if (!vendor) {
+      vendor = db.prepare('SELECT * FROM vendors WHERE LOWER(email) = LOWER(?)').get(email);
+    }
+
+    if (!vendor) {
+      const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      db.prepare(`
+        INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')
+      `).run(vId, companyName, contactPerson, email, phone, rawGstin || null, rawPan || null);
+      vendor = { id: vId, company_name: companyName, email, phone };
+    } else {
+      // Update vendor details if incoming data is more complete
+      const updates: string[] = [];
+      const params: any[] = [];
+
+      if (rawCompany && vendor.company_name !== companyName && (!vendor.company_name || vendor.company_name.includes('@'))) {
+        updates.push('company_name = ?');
+        params.push(companyName);
+      }
+
+      if (rawContact && (vendor.contact_person === 'Representative' || !vendor.contact_person)) {
+        updates.push('contact_person = ?');
+        params.push(rawContact);
+      }
+
+      if (rawPhone && (vendor.phone === '9999999999' || vendor.phone === 'N/A' || !vendor.phone)) {
+        updates.push('phone = ?');
+        params.push(rawPhone);
+      }
+
+      if (rawGstin && !vendor.gstin) {
+        updates.push('gstin = ?');
+        params.push(rawGstin);
+      }
+
+      if (updates.length > 0) {
+        params.push(vendor.id);
+        db.prepare(`UPDATE vendors SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+      }
+    }
+
+    // Always link vendor to corporate client
+    if (customerOrgId) {
+      db.prepare('INSERT OR IGNORE INTO company_vendors (company_id, vendor_id) VALUES (?, ?)').run(customerOrgId, vendor.id);
+    }
+
+    // Always ensure auction invite exists
+    const hasInvite = db.prepare('SELECT id FROM auction_invites WHERE auction_id = ? AND vendor_id = ?').get(auctionId, vendor.id);
+    if (!hasInvite) {
+      const token = generateMagicToken();
+      db.prepare(`
+        INSERT INTO auction_invites (id, auction_id, vendor_id, role, token, expires_at)
+        VALUES (?, ?, ?, 'vendor', ?, datetime('now', '+7 days'))
+      `).run(`inv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, auctionId, vendor.id, token);
+    }
+  }
+}
+
 export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRepository): Router {
   const router = Router();
 
@@ -83,7 +202,7 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
     const lots = repo.getLotsForAuction(req.params.id);
     const assignedVendors = db.prepare(`
-      SELECT i.id as invite_id, i.token, i.role, v.id as vendor_id, v.company_name, v.email, v.phone, v.status as vendor_status
+      SELECT i.id as invite_id, i.token, i.role, v.id as vendor_id, v.company_name, v.contact_person, v.email, v.phone, v.gstin, v.status as vendor_status
       FROM auction_invites i
       LEFT JOIN vendors v ON i.vendor_id = v.id
       WHERE i.auction_id = ?
@@ -130,28 +249,8 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
         });
       }
 
-      if (Array.isArray(customerVendors)) {
-        customerVendors.forEach((cv: any) => {
-          if (!cv.email) return;
-          let vendor = db.prepare('SELECT id FROM vendors WHERE email = ?').get(cv.email) as any;
-          if (!vendor) {
-            const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-            db.prepare(`
-              INSERT INTO vendors (id, company_name, contact_person, email, phone, status)
-              VALUES (?, ?, ?, ?, ?, 'approved')
-            `).run(vId, cv.company_name || cv.email, cv.contact_person || 'Representative', cv.email, cv.phone || '9999999999');
-            vendor = { id: vId };
-          }
-
-          db.prepare('INSERT OR IGNORE INTO company_vendors VALUES (?, ?)').run(customer_org_id, vendor.id);
-
-          const token = generateMagicToken();
-          db.prepare(`
-            INSERT INTO auction_invites (id, auction_id, vendor_id, role, token, expires_at)
-            VALUES (?, ?, ?, 'vendor', ?, datetime('now', '+7 days'))
-          `).run(`inv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, id, vendor.id, token);
-        });
-      }
+      // Robust processing of customer vendors (custom or pool)
+      processAuctionVendors(db, id, customer_org_id, customerVendors);
     });
 
     try {
@@ -167,7 +266,7 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
     const auctionId = req.params.id;
     const { title, scheduled_start, duration_minutes, anti_sniping_minutes, max_buffer_minutes, lots, customerVendors, notify_vendors } = req.body;
 
-    const existing = db.prepare('SELECT status FROM auctions WHERE id = ?').get(auctionId) as any;
+    const existing = db.prepare('SELECT status, customer_org_id FROM auctions WHERE id = ?').get(auctionId) as any;
     if (!existing) return res.status(404).json({ error: 'Auction not found.' });
     if (existing.status === 'ended') return res.status(400).json({ error: 'Cannot edit an auction that has already ended.' });
 
@@ -203,29 +302,8 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
         });
       }
 
-      if (Array.isArray(customerVendors)) {
-        customerVendors.forEach((cv: any) => {
-          if (!cv.email) return;
-          let vendor = db.prepare('SELECT id FROM vendors WHERE email = ?').get(cv.email) as any;
-          if (!vendor) {
-            const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-            db.prepare(`
-              INSERT INTO vendors (id, company_name, contact_person, email, phone, status)
-              VALUES (?, ?, ?, ?, ?, 'approved')
-            `).run(vId, cv.company_name || cv.email, cv.contact_person || 'Representative', cv.email, cv.phone || '9999999999');
-            vendor = { id: vId };
-          }
-
-          const hasInvite = db.prepare('SELECT id FROM auction_invites WHERE auction_id = ? AND vendor_id = ?').get(auctionId, vendor.id);
-          if (!hasInvite) {
-            const token = generateMagicToken();
-            db.prepare(`
-              INSERT INTO auction_invites (id, auction_id, vendor_id, role, token, expires_at)
-              VALUES (?, ?, ?, 'vendor', ?, datetime('now', '+7 days'))
-            `).run(`inv_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`, auctionId, vendor.id, token);
-          }
-        });
-      }
+      // Robust processing of customer vendors (custom or pool)
+      processAuctionVendors(db, auctionId, existing.customer_org_id, customerVendors);
     });
 
     try {
@@ -335,4 +413,3 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
   return router;
 }
-

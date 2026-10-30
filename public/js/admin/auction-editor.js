@@ -2,9 +2,19 @@ import { renderAdminNav } from './nav.js';
 import { showToast } from '../toast.js';
 
 let lots = [];
-let assignedVendors = []; // { company_name, contact_person, email, phone }
+let assignedVendors = []; // { vendor_id, company_name, contact_person, email, phone, gstin, is_pool }
 let companyVendorPool = [];
 let isEditing = false;
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   renderAdminNav('editor');
@@ -48,7 +58,14 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('btn-add-custom-vendor')?.addEventListener('click', () => {
-    assignedVendors.push({ company_name: '', contact_person: '', email: '', phone: '' });
+    assignedVendors.push({
+      company_name: '',
+      contact_person: '',
+      email: '',
+      phone: '',
+      gstin: '',
+      is_pool: false,
+    });
     renderAssignedVendors();
   });
 
@@ -183,12 +200,15 @@ async function enterEditMode(auctionId) {
     }));
     renderLots();
 
-    // Populate assigned vendors
+    // Populate assigned vendors preserving details
     assignedVendors = fetchedVendors.map((v) => ({
+      vendor_id: v.vendor_id,
       company_name: v.company_name,
-      contact_person: '',
+      contact_person: v.contact_person || 'Representative',
       email: v.email,
       phone: v.phone || '',
+      gstin: v.gstin || '',
+      is_pool: true,
     }));
     renderAssignedVendors();
 
@@ -228,34 +248,34 @@ function renderLots() {
       <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div class="sm:col-span-2">
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">Product / Item Description</label>
-          <input type="text" required placeholder="e.g. Imported Indonesian Steam Coal (5000 GAR)" value="${lot.product_name || ''}" onchange="window.updateLotField(${idx}, 'product_name', this.value)" class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          <input type="text" required placeholder="e.g. Imported Indonesian Steam Coal (5000 GAR)" value="${escapeHtml(lot.product_name || '')}" oninput="window.updateLotField(${idx}, 'product_name', this.value)" class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
         </div>
         <div>
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">Category</label>
-          <input type="text" placeholder="e.g. Raw Material" value="${lot.category || 'Standard'}" onchange="window.updateLotField(${idx}, 'category', this.value)" class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          <input type="text" placeholder="e.g. Raw Material" value="${escapeHtml(lot.category || 'Standard')}" oninput="window.updateLotField(${idx}, 'category', this.value)" class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
         </div>
       </div>
 
       <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div>
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">Quantity</label>
-          <input type="number" step="any" required min="0.01" value="${lot.quantity || ''}" onchange="window.updateLotField(${idx}, 'quantity', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
+          <input type="number" step="any" required min="0.01" value="${lot.quantity || ''}" oninput="window.updateLotField(${idx}, 'quantity', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white" />
         </div>
         <div>
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">UOM (Unit)</label>
-          <input type="text" required placeholder="MT, Nos, Litres" value="${lot.uom || 'MT'}" onchange="window.updateLotField(${idx}, 'uom', this.value)" class="w-full border border-slate-300 p-2 rounded-lg bg-white uppercase font-bold" />
+          <input type="text" required placeholder="MT, Nos, Litres" value="${escapeHtml(lot.uom || 'MT')}" oninput="window.updateLotField(${idx}, 'uom', this.value)" class="w-full border border-slate-300 p-2 rounded-lg bg-white uppercase font-bold" />
         </div>
         <div>
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">Ceiling Price (₹)</label>
-          <input type="number" step="any" required min="1" value="${lot.start_price || ''}" onchange="window.updateLotField(${idx}, 'start_price', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white font-mono" />
+          <input type="number" step="any" required min="1" value="${lot.start_price || ''}" oninput="window.updateLotField(${idx}, 'start_price', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white font-mono" />
         </div>
         <div>
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">Reserve Price (₹)</label>
-          <input type="number" step="any" required min="1" value="${lot.reserve_price || ''}" onchange="window.updateLotField(${idx}, 'reserve_price', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white font-mono" />
+          <input type="number" step="any" required min="1" value="${lot.reserve_price || ''}" oninput="window.updateLotField(${idx}, 'reserve_price', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white font-mono" />
         </div>
         <div>
           <label class="text-[11px] font-semibold text-slate-600 block mb-0.5">Decrement Step (₹)</label>
-          <input type="number" step="any" required min="1" value="${lot.bid_decrement || 10}" onchange="window.updateLotField(${idx}, 'bid_decrement', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white font-mono" />
+          <input type="number" step="any" required min="1" value="${lot.bid_decrement || 10}" oninput="window.updateLotField(${idx}, 'bid_decrement', parseFloat(this.value))" class="w-full border border-slate-300 p-2 rounded-lg bg-white font-mono" />
         </div>
       </div>
     </div>
@@ -294,25 +314,41 @@ function renderAssignedVendors() {
   container.innerHTML = assignedVendors
     .map(
       (v, idx) => `
-    <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-lg border border-slate-200 items-center">
-      <div>
-        <label class="text-[10px] text-slate-500 block mb-0.5">Vendor Company</label>
-        <input type="text" required placeholder="Company Name" value="${v.company_name || ''}" onchange="window.updateVendorField(${idx}, 'company_name', this.value)" class="w-full border border-slate-300 p-1.5 rounded bg-white text-xs font-semibold" />
+    <div class="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-2.5" data-vendor-index="${idx}">
+      <div class="flex items-center justify-between pb-1 border-b border-slate-200">
+        <div class="flex items-center gap-2">
+          <span class="font-bold text-slate-800 text-xs">Supplier #${idx + 1}</span>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded ${
+            v.is_pool ? 'bg-blue-100 text-blue-800' : 'bg-emerald-100 text-emerald-800'
+          }">
+            ${v.is_pool ? 'Pre-Approved Pool' : 'New Custom Vendor (Will auto-save to directory)'}
+          </span>
+        </div>
+        <button type="button" onclick="window.removeVendor(${idx})" class="text-red-500 hover:text-red-700 font-bold text-xs flex items-center gap-1">
+          ✕ Remove
+        </button>
       </div>
 
-      <div>
-        <label class="text-[10px] text-slate-500 block mb-0.5">Email Address</label>
-        <input type="email" required placeholder="vendor@procure.com" value="${v.email || ''}" onchange="window.updateVendorField(${idx}, 'email', this.value)" class="w-full border border-slate-300 p-1.5 rounded bg-white text-xs" />
-      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+        <div>
+          <label class="text-[10px] text-slate-500 block mb-0.5">Company Name *</label>
+          <input type="text" placeholder="e.g. Apex Steels Ltd" value="${escapeHtml(v.company_name || '')}" oninput="window.updateVendorField(${idx}, 'company_name', this.value)" class="w-full border border-slate-300 p-1.5 rounded-lg bg-white text-xs font-semibold text-slate-800" />
+        </div>
 
-      <div>
-        <label class="text-[10px] text-slate-500 block mb-0.5">Phone (for WhatsApp)</label>
-        <input type="text" placeholder="e.g. 9876543210" value="${v.phone || ''}" onchange="window.updateVendorField(${idx}, 'phone', this.value)" class="w-full border border-slate-300 p-1.5 rounded bg-white text-xs font-mono" />
-      </div>
+        <div>
+          <label class="text-[10px] text-slate-500 block mb-0.5">Contact Person</label>
+          <input type="text" placeholder="Representative" value="${escapeHtml(v.contact_person || '')}" oninput="window.updateVendorField(${idx}, 'contact_person', this.value)" class="w-full border border-slate-300 p-1.5 rounded-lg bg-white text-xs text-slate-700" />
+        </div>
 
-      <div class="flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-4">
-        <span class="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-1 rounded">Private Pass</span>
-        <button type="button" onclick="window.removeVendor(${idx})" class="text-red-500 hover:text-red-700 font-bold text-xs">✕ Remove</button>
+        <div>
+          <label class="text-[10px] text-slate-500 block mb-0.5">Email Address</label>
+          <input type="email" placeholder="vendor@company.com" value="${escapeHtml(v.email || '')}" oninput="window.updateVendorField(${idx}, 'email', this.value)" class="w-full border border-slate-300 p-1.5 rounded-lg bg-white text-xs text-slate-800 font-mono" />
+        </div>
+
+        <div>
+          <label class="text-[10px] text-slate-500 block mb-0.5">Phone (WhatsApp)</label>
+          <input type="text" placeholder="9876543210" value="${escapeHtml(v.phone || '')}" oninput="window.updateVendorField(${idx}, 'phone', this.value)" class="w-full border border-slate-300 p-1.5 rounded-lg bg-white text-xs font-mono" />
+        </div>
       </div>
     </div>
   `
@@ -321,7 +357,9 @@ function renderAssignedVendors() {
 }
 
 window.updateVendorField = function (index, field, value) {
-  if (assignedVendors[index]) assignedVendors[index][field] = value;
+  if (assignedVendors[index]) {
+    assignedVendors[index][field] = value;
+  }
 };
 
 window.removeVendor = function (index) {
@@ -376,7 +414,7 @@ async function openPoolModal() {
         return `
         <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer transition-colors">
           <div class="flex items-center gap-2.5">
-            <input type="checkbox" value="${cv.id}" data-company="${cv.company_name}" data-email="${cv.email}" data-phone="${cv.phone || ''}" data-in-pool="true" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
+            <input type="checkbox" value="${cv.id}" data-company="${escapeHtml(cv.company_name)}" data-contact="${escapeHtml(cv.contact_person || 'Representative')}" data-email="${escapeHtml(cv.email)}" data-phone="${escapeHtml(cv.phone || '')}" data-in-pool="true" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
           isAlreadyAdded ? 'checked disabled' : ''
         } />
             <div>
@@ -412,7 +450,7 @@ async function openPoolModal() {
         return `
         <label class="flex items-center justify-between p-2.5 bg-slate-50 hover:bg-slate-100 rounded-lg border border-slate-200 cursor-pointer transition-colors">
           <div class="flex items-center gap-2.5">
-            <input type="checkbox" value="${ov.id}" data-company="${ov.company_name}" data-email="${ov.email}" data-phone="${ov.phone || ''}" data-in-pool="false" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
+            <input type="checkbox" value="${ov.id}" data-company="${escapeHtml(ov.company_name)}" data-contact="${escapeHtml(ov.contact_person || 'Representative')}" data-email="${escapeHtml(ov.email)}" data-phone="${escapeHtml(ov.phone || '')}" data-in-pool="false" class="pool-checkbox rounded text-blue-600 focus:ring-blue-500" ${
           isAlreadyAdded ? 'checked disabled' : ''
         } />
             <div>
@@ -448,10 +486,12 @@ async function confirmPoolSelection() {
   let addedCount = 0;
   for (const cb of checkboxes) {
     assignedVendors.push({
+      vendor_id: cb.value,
       company_name: cb.dataset.company,
-      contact_person: '',
+      contact_person: cb.dataset.contact || 'Representative',
       email: cb.dataset.email,
-      phone: cb.dataset.phone,
+      phone: cb.dataset.phone || '',
+      is_pool: true,
     });
     addedCount++;
 
@@ -503,6 +543,34 @@ async function handleFormSubmit(e) {
     }
   }
 
+  // Filter and sanitize assigned vendors
+  const validCustomerVendors = [];
+  for (let i = 0; i < assignedVendors.length; i++) {
+    const v = assignedVendors[i];
+    const name = (v.company_name || '').trim();
+    const email = (v.email || '').trim();
+    const phone = (v.phone || '').trim();
+    const contact = (v.contact_person || '').trim();
+
+    // Skip completely blank rows
+    if (!name && !email && !phone) continue;
+
+    // Gracefully handle partial input:
+    // If only phone or only email or only company is entered, ensure at least one identifier is present
+    if (!name && !email && !phone) {
+      continue;
+    }
+
+    validCustomerVendors.push({
+      vendor_id: v.vendor_id || undefined,
+      company_name: name,
+      contact_person: contact,
+      email: email,
+      phone: phone,
+      gstin: (v.gstin || '').trim() || undefined,
+    });
+  }
+
   const payload = {
     id: auctionId,
     title,
@@ -512,7 +580,7 @@ async function handleFormSubmit(e) {
     anti_sniping_minutes: antiSniping,
     max_buffer_minutes: maxBuffer,
     lots,
-    customerVendors: assignedVendors,
+    customerVendors: validCustomerVendors,
     notify_vendors: notifyVendors,
   };
 
