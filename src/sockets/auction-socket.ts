@@ -12,41 +12,82 @@ export function registerAuctionSockets(
   io.on('connection', (socket: Socket) => {
     // 1. Join room and authenticate with Magic Link token
     socket.on('join_room', (data: { auctionId: string; token: string }) => {
-      const invite = db
-        .prepare(`
-          SELECT i.*, v.company_name as vendorCompanyName, v.status as vendorStatus 
-          FROM auction_invites i 
-          LEFT JOIN vendors v ON i.vendor_id = v.id 
-          WHERE i.token = ? AND i.auction_id = ?
-        `)
-        .get(data.token, data.auctionId) as (InviteRecord & { vendor_id?: string }) | undefined;
+      try {
+        const invite = db
+          .prepare(`
+            SELECT i.*, v.company_name as vendorCompanyName, v.status as vendorStatus 
+            FROM auction_invites i 
+            LEFT JOIN vendors v ON i.vendor_id = v.id 
+            WHERE i.token = ? AND i.auction_id = ?
+          `)
+          .get(data.token, data.auctionId) as any;
 
-      if (invite) {
-        invite.expiresAt = new Date(invite.expiresAt);
+        if (!invite) {
+          return socket.emit('error_message', {
+            code: 'INVALID_TOKEN',
+            message: 'Invalid or unrecognized access link for this auction.',
+          });
+        }
+
+        // Map SQLite snake_case columns to camelCase InviteRecord
+        const inviteRecord: InviteRecord = {
+          token: invite.token,
+          auctionId: invite.auction_id,
+          role: invite.role,
+          vendorId: invite.vendor_id || undefined,
+          vendorCompanyName: invite.vendorCompanyName || undefined,
+          vendorStatus: invite.vendorStatus || undefined,
+          expiresAt: new Date(invite.expires_at),
+          isRevoked: Boolean(invite.is_revoked),
+        };
+
+        const auth = verifyInviteToken(inviteRecord);
+        if (!auth.isAuthorized) {
+          return socket.emit('error_message', { code: auth.errorCode, message: auth.errorMessage });
+        }
+
+        let companyName = auth.companyName;
+        if (invite.role === 'customer_observer') {
+          const org = db
+            .prepare(`
+              SELECT o.name FROM auctions a 
+              JOIN organizations o ON a.customer_org_id = o.id 
+              WHERE a.id = ?
+            `)
+            .get(data.auctionId) as { name: string } | undefined;
+          if (org?.name) {
+            companyName = `${org.name} (Observer)`;
+          }
+        }
+
+        socket.data = {
+          auctionId: data.auctionId,
+          role: auth.role,
+          vendorId: invite.vendor_id,
+          companyName: companyName || 'Participant',
+        };
+
+        const roomName = `auction:${data.auctionId}`;
+        socket.join(roomName);
+
+        const auction = db
+          .prepare('SELECT status, current_end FROM auctions WHERE id = ?')
+          .get(data.auctionId) as { status: string; current_end: string } | undefined;
+
+        const lots = repo.getLotsForAuction(data.auctionId);
+        socket.emit('room_joined', {
+          auctionId: data.auctionId,
+          role: auth.role,
+          companyName: socket.data.companyName,
+          status: auction?.status || 'scheduled',
+          lots,
+        });
+      } catch (err: any) {
+        socket.emit('error_message', {
+          code: 'SERVER_ERROR',
+          message: err.message || 'An error occurred while joining the auction room.',
+        });
       }
-
-      const auth = verifyInviteToken(invite);
-      if (!auth.isAuthorized) {
-        return socket.emit('error_message', { code: auth.errorCode, message: auth.errorMessage });
-      }
-
-      socket.data = {
-        auctionId: data.auctionId,
-        role: auth.role,
-        vendorId: invite?.vendor_id,
-        companyName: auth.companyName,
-      };
-
-      const roomName = `auction:${data.auctionId}`;
-      socket.join(roomName);
-
-      const lots = repo.getLotsForAuction(data.auctionId);
-      socket.emit('room_joined', {
-        auctionId: data.auctionId,
-        role: auth.role,
-        companyName: auth.companyName,
-        lots,
-      });
     });
 
     // 2. Submit reverse auction bid
@@ -127,4 +168,3 @@ export function registerAuctionSockets(
     });
   });
 }
-

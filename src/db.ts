@@ -87,6 +87,27 @@ export function initializeDatabase(dbPath: string = ':memory:'): Database.Databa
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       PRIMARY KEY (company_id, vendor_id)
     );
+
+    CREATE TABLE IF NOT EXISTS tender_requests (
+      id TEXT PRIMARY KEY,
+      request_number TEXT UNIQUE NOT NULL,
+      customer_org_id TEXT REFERENCES organizations(id),
+      company_name TEXT NOT NULL,
+      contact_person TEXT NOT NULL,
+      email TEXT NOT NULL,
+      phone TEXT NOT NULL,
+      title TEXT NOT NULL,
+      category TEXT DEFAULT 'General Procurement',
+      target_date DATETIME,
+      duration_minutes INTEGER NOT NULL DEFAULT 45,
+      delivery_location TEXT,
+      special_terms TEXT,
+      lots_json TEXT NOT NULL,
+      suggested_vendors_json TEXT,
+      status TEXT CHECK(status IN ('pending_review', 'approved', 'rejected')) DEFAULT 'pending_review',
+      converted_auction_id TEXT REFERENCES auctions(id),
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
   return db;

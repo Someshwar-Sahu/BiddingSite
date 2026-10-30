@@ -35,8 +35,11 @@ export function generateMagicToken(): string {
 /**
  * Constructs the full access URL for a vendor or customer observer.
  */
-export function buildAccessUrl(baseUrl: string, auctionId: string, token: string): string {
+export function buildAccessUrl(baseUrl: string, auctionId: string, token: string, role?: string): string {
   const cleanBase = baseUrl.replace(/\/+$/, '');
+  if (role === 'customer_observer') {
+    return `${cleanBase}/observer/${auctionId}?key=${token}`;
+  }
   return `${cleanBase}/live-auction/${auctionId}?key=${token}`;
 }
 

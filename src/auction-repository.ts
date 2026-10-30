@@ -6,6 +6,7 @@ export interface LotRow {
   auction_id: string;
   lot_number: number;
   product_name: string;
+  category?: string;
   quantity: number;
   uom: string;
   start_price: number;
@@ -13,6 +14,7 @@ export interface LotRow {
   bid_decrement: number;
   current_lowest_bid: number | null;
   current_l1_vendor_id: string | null;
+  current_l1_vendor_name?: string | null;
   status: string;
 }
 
@@ -68,7 +70,13 @@ export class AuctionRepository {
 
   getLotsForAuction(auctionId: string): LotRow[] {
     return this.db
-      .prepare('SELECT * FROM lots WHERE auction_id = ? ORDER BY lot_number ASC')
+      .prepare(`
+        SELECT l.*, v.company_name as current_l1_vendor_name 
+        FROM lots l 
+        LEFT JOIN vendors v ON l.current_l1_vendor_id = v.id 
+        WHERE l.auction_id = ? 
+        ORDER BY l.lot_number ASC
+      `)
       .all(auctionId) as LotRow[];
   }
 }

@@ -3,7 +3,7 @@ import { playChime, initMuteButton } from './audio.js';
 
 const urlParams = new URLSearchParams(window.location.search);
 const token = urlParams.get('key');
-const pathParts = window.location.pathname.split('/');
+const pathParts = window.location.pathname.split('/').filter(Boolean);
 const auctionId = pathParts[pathParts.length - 1] || 'NTA-EPACKPetro-07';
 
 let currentRole = 'vendor';
@@ -18,23 +18,40 @@ initMuteButton('mute-btn');
 // --- 1. CONNECTION & AUTH ---
 socket.on('connect', () => {
   if (!token) {
+    const timerDisplay = document.getElementById('timer-display');
+    if (timerDisplay) timerDisplay.innerText = 'Key Missing';
+    const tbody = document.getElementById('lots-table-body');
+    if (tbody) {
+      tbody.innerHTML = '<tr><td colspan="9" class="py-12 text-center text-red-500 font-semibold">⚠️ Missing access key in URL. Please use your official invitation link.</td></tr>';
+    }
     showToast('Missing access key in URL. Please use your valid Magic Link.', 'error');
     return;
   }
   socket.emit('join_room', { auctionId, token });
 });
 
+socket.on('connect_error', (err) => {
+  console.warn('Socket connection error:', err);
+  const timerDisplay = document.getElementById('timer-display');
+  if (timerDisplay && timerDisplay.innerText === 'Connecting...') {
+    timerDisplay.innerText = 'Reconnecting...';
+  }
+});
+
 socket.on('room_joined', (data) => {
   currentRole = data.role;
   myCompanyName = data.companyName;
 
-  document.getElementById('company-name-display').innerText = data.companyName;
-  document.getElementById('role-badge').innerText =
-    data.role === 'customer_observer' ? 'Spectator Mode (Epack)' : 'Approved Bidder';
-
+  // Seamlessly auto-redirect corporate customer observers to their dedicated executive spectator dashboard
   if (data.role === 'customer_observer') {
-    document.getElementById('savings-banner').classList.remove('hidden');
+    window.location.replace(`/observer/${auctionId}?key=${encodeURIComponent(token)}`);
+    return;
   }
+
+  const compDisplay = document.getElementById('company-name-display');
+  if (compDisplay) compDisplay.innerText = data.companyName;
+  const roleBadge = document.getElementById('role-badge');
+  if (roleBadge) roleBadge.innerText = 'Approved Bidder';
 
   renderLots(data.lots);
 });
@@ -45,6 +62,15 @@ socket.on('clock_tick', (data) => {
   if (el) el.innerText = data.formattedTime;
 });
 
+socket.on('auction_ended', () => {
+  const el = document.getElementById('timer-display');
+  if (el) {
+    el.innerText = 'Auction Ended';
+    el.parentElement?.classList.replace('bg-red-600', 'bg-slate-700');
+  }
+  showToast('This auction event has concluded.', 'warning');
+});
+
 // --- 3. RENDERING & STEPPER CONSTRAINTS ---
 function calculateNextMaxBid(lot) {
   return lot.current_lowest_bid ? lot.current_lowest_bid - lot.bid_decrement : lot.start_price;
@@ -52,14 +78,19 @@ function calculateNextMaxBid(lot) {
 
 function renderLots(lots) {
   const tbody = document.getElementById('lots-table-body');
+  if (!tbody) return;
   tbody.innerHTML = '';
+
+  if (!lots || lots.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" class="py-12 text-center text-gray-400">No active tender items in this auction.</td></tr>';
+    return;
+  }
 
   lots.forEach((lot) => {
     lotsData[lot.id] = lot;
     lot.nextMaxBid = calculateNextMaxBid(lot);
 
     const lowestText = lot.current_lowest_bid ? `INR ${lot.current_lowest_bid.toLocaleString('en-IN')}` : 'INR —';
-    const isObserver = currentRole === 'customer_observer';
 
     const row = document.createElement('tr');
     row.id = `row-${lot.id}`;
@@ -80,36 +111,25 @@ function renderLots(lots) {
           INR 0.00
         </span>
       </td>
-      ${
-        isObserver
-          ? `
-        <td colspan="2" class="py-5 px-6 text-center text-xs font-bold text-emerald-600 bg-emerald-50">
-          👁️ Monitoring Live Bids (Read-Only)
-        </td>
-      `
-          : `
-        <td class="py-5 px-6 text-center">
-          <span id="max-label-${lot.id}" class="text-[11px] font-bold text-blue-600 block mb-1">
-            ↓ Max: INR ${lot.nextMaxBid.toLocaleString('en-IN')}
-          </span>
-          <div class="inline-flex items-center border border-gray-300 rounded overflow-hidden">
-            <button data-action="decrement" data-lot="${lot.id}" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 font-bold text-gray-700 select-none">-</button>
-            <input id="input-${lot.id}" type="number" value="${lot.nextMaxBid}" class="w-24 text-center py-1 text-sm font-bold text-gray-800 outline-none" />
-            <button id="plus-btn-${lot.id}" data-action="increment" data-lot="${lot.id}" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 font-bold text-gray-700 select-none">+</button>
-          </div>
-        </td>
-        <td class="py-5 px-4 text-center">
-          <button id="submit-btn-${lot.id}" data-action="submit" data-lot="${lot.id}" class="bg-[#1e2238] hover:bg-slate-800 text-white font-bold text-xs px-6 py-2.5 rounded shadow active:scale-95 transition-transform">
-            Submit
-          </button>
-        </td>
-      `
-      }
+      <td class="py-5 px-6 text-center">
+        <span id="max-label-${lot.id}" class="text-[11px] font-bold text-blue-600 block mb-1">
+          ↓ Max: INR ${lot.nextMaxBid.toLocaleString('en-IN')}
+        </span>
+        <div class="inline-flex items-center border border-gray-300 rounded overflow-hidden">
+          <button data-action="decrement" data-lot="${lot.id}" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 font-bold text-gray-700 select-none">-</button>
+          <input id="input-${lot.id}" type="number" value="${lot.nextMaxBid}" class="w-24 text-center py-1 text-sm font-bold text-gray-800 outline-none" />
+          <button id="plus-btn-${lot.id}" data-action="increment" data-lot="${lot.id}" class="px-3 py-1 bg-gray-100 hover:bg-gray-200 font-bold text-gray-700 select-none">+</button>
+        </div>
+      </td>
+      <td class="py-5 px-4 text-center">
+        <button id="submit-btn-${lot.id}" data-action="submit" data-lot="${lot.id}" class="bg-[#1e2238] hover:bg-slate-800 text-white font-bold text-xs px-6 py-2.5 rounded shadow active:scale-95 transition-transform">
+          Submit
+        </button>
+      </td>
     `;
     tbody.appendChild(row);
     updateStepperState(lot.id);
   });
-  calculateObserverSavings();
 }
 
 // --- EVENT DELEGATION FOR STEPPER & SUBMIT ---
@@ -120,6 +140,7 @@ document.addEventListener('click', (e) => {
   if (!action || !lotId) return;
 
   const lot = lotsData[lotId];
+  if (!lot) return;
   const input = document.getElementById(`input-${lotId}`);
 
   if (action === 'decrement') {
@@ -150,6 +171,7 @@ document.addEventListener('click', (e) => {
 
 function updateStepperState(lotId) {
   const lot = lotsData[lotId];
+  if (!lot) return;
   const input = document.getElementById(`input-${lotId}`);
   const plusBtn = document.getElementById(`plus-btn-${lotId}`);
   const submitBtn = document.getElementById(`submit-btn-${lotId}`);
@@ -212,8 +234,6 @@ socket.on('bid_placed', (data) => {
       yourBidPill.className = 'bg-emerald-600 text-white font-bold px-4 py-2 rounded-full text-xs inline-block ring-2 ring-emerald-300';
     }
   }
-
-  calculateObserverSavings();
 });
 
 socket.on('outbid_alert', (data) => {
@@ -228,16 +248,13 @@ socket.on('outbid_alert', (data) => {
 });
 
 socket.on('error_message', (err) => {
+  const timerDisplay = document.getElementById('timer-display');
+  if (timerDisplay) timerDisplay.innerText = 'Access Denied';
+  const compDisplay = document.getElementById('company-name-display');
+  if (compDisplay) compDisplay.innerText = 'Unauthorized';
+  const tbody = document.getElementById('lots-table-body');
+  if (tbody) {
+    tbody.innerHTML = `<tr><td colspan="9" class="py-12 text-center text-red-500 font-semibold">⚠️ ${err.message || 'Access Denied'}</td></tr>`;
+  }
   showToast(err.message, 'error');
 });
-
-function calculateObserverSavings() {
-  let total = 0;
-  Object.values(lotsData).forEach((lot) => {
-    if (lot.current_lowest_bid && lot.current_lowest_bid < lot.reserve_price) {
-      total += (lot.reserve_price - lot.current_lowest_bid) * lot.quantity;
-    }
-  });
-  const el = document.getElementById('total-savings-val');
-  if (el) el.innerText = `₹${total.toLocaleString('en-IN')}`;
-}

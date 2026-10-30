@@ -7,6 +7,7 @@ import { AuctionRepository } from './auction-repository.js';
 import { createPublicRouter } from './routes/public.routes.js';
 import { createAdminCompaniesRouter } from './routes/admin-companies.routes.js';
 import { createAdminAuctionsRouter } from './routes/admin-auctions.routes.js';
+import { createCustomerRequestsRouter } from './routes/customer-requests.routes.js';
 import { registerAuctionSockets } from './sockets/auction-socket.js';
 import { startAuctionTicker } from './sockets/clock-ticker.js';
 
@@ -33,6 +34,7 @@ export function createAuctionServer(db: Database.Database): ServerInstance {
   app.use('/', createPublicRouter(repo, db));
   app.use('/api/admin', createAdminCompaniesRouter(db));
   app.use('/api/admin', createAdminAuctionsRouter(db, repo));
+  app.use('/api', createCustomerRequestsRouter(db));
 
   // Mount real-time WebSockets
   registerAuctionSockets(io, db, repo);
