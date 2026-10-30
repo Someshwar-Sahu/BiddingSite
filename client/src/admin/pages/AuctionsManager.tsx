@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Auction, TenderRequest, Amendment } from '../../types/procurement';
+import { SearchBar } from '../../components/SearchBar';
 import { ReviewRequestModal } from './ReviewRequestModal';
 import { InvitesModal } from './InvitesModal';
 
@@ -104,17 +105,16 @@ export const AuctionsManager: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Search tender, code, client..."
+          <SearchBar
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 outline-none focus:ring-1 focus:ring-blue-500 w-52 sm:w-64"
+            onChange={setSearchQuery}
+            placeholder="Search tender, code, client..."
+            className="w-52 sm:w-64"
           />
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 bg-white"
+            className="border border-slate-300 rounded-xl px-2.5 py-2 text-xs font-semibold text-slate-700 bg-white"
           >
             <option value="all">All States</option>
             <option value="live">Live Bidding</option>

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { Auction, TenderRequest, Facility, Vendor, Amendment, Organization } from '../../types/procurement';
+import { SearchBar } from '../../components/SearchBar';
 import { InspectRequestModal } from './InspectRequestModal';
 import { CustomerEditRequestModal } from './CustomerEditRequestModal';
 import { CustomerAmendmentModal } from './CustomerAmendmentModal';
@@ -19,9 +20,12 @@ export const CustomerDashboard: React.FC = () => {
   const [amendments, setAmendments] = useState<Amendment[]>([]);
   const [activeTab, setActiveTab] = useState<'auctions' | 'facilities' | 'suppliers' | 'amendments'>('auctions');
 
-  // Filters
+  // Search states for all sections
   const [statusFilter, setStatusFilter] = useState<'all' | 'live' | 'scheduled' | 'ended'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [auctionSearch, setAuctionSearch] = useState('');
+  const [facilitySearch, setFacilitySearch] = useState('');
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [amendmentSearch, setAmendmentSearch] = useState('');
 
   // Modals state
   const [editReqId, setEditReqId] = useState<string | null>(null);
@@ -91,20 +95,59 @@ export const CustomerDashboard: React.FC = () => {
     } catch (_) {}
   };
 
-  // Combine active and concluded auctions for filtering
+  // 1. Filtered Auctions
   const allAuctions = [...activeAuctions, ...concludedAuctions];
   const filteredAuctions = allAuctions.filter((a) => {
     if (statusFilter === 'live' && a.status !== 'live' && a.status !== 'extended') return false;
     if (statusFilter === 'scheduled' && a.status !== 'scheduled') return false;
     if (statusFilter === 'ended' && a.status !== 'ended') return false;
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
+    if (auctionSearch.trim()) {
+      const q = auctionSearch.toLowerCase();
       const matchId = a.id.toLowerCase().includes(q);
       const matchTitle = (a.title || '').toLowerCase().includes(q);
       const matchLoc = (a.delivery_location || '').toLowerCase().includes(q);
-      if (!matchId && !matchTitle && !matchLoc) return false;
+      const matchCat = (a.category || '').toLowerCase().includes(q);
+      if (!matchId && !matchTitle && !matchLoc && !matchCat) return false;
     }
     return true;
+  });
+
+  // 2. Filtered Facilities
+  const filteredFacilities = facilities.filter((f) => {
+    if (!facilitySearch.trim()) return true;
+    const q = facilitySearch.toLowerCase();
+    return (
+      f.facility_name.toLowerCase().includes(q) ||
+      f.city.toLowerCase().includes(q) ||
+      f.state.toLowerCase().includes(q) ||
+      (f.address || '').toLowerCase().includes(q)
+    );
+  });
+
+  // 3. Filtered Suppliers
+  const filteredSuppliers = suppliers.filter((v) => {
+    if (!supplierSearch.trim()) return true;
+    const q = supplierSearch.toLowerCase();
+    return (
+      v.company_name.toLowerCase().includes(q) ||
+      (v.contact_person || '').toLowerCase().includes(q) ||
+      (v.email || '').toLowerCase().includes(q) ||
+      (v.phone || '').includes(q) ||
+      (v.gstin || '').toLowerCase().includes(q)
+    );
+  });
+
+  // 4. Filtered Amendments
+  const filteredAmendments = amendments.filter((a) => {
+    if (!amendmentSearch.trim()) return true;
+    const q = amendmentSearch.toLowerCase();
+    return (
+      a.id.toLowerCase().includes(q) ||
+      (a.auction_title || '').toLowerCase().includes(q) ||
+      (a.auction_id || '').toLowerCase().includes(q) ||
+      (a.reason || '').toLowerCase().includes(q) ||
+      (a.admin_notes || '').toLowerCase().includes(q)
+    );
   });
 
   return (
@@ -225,12 +268,14 @@ export const CustomerDashboard: React.FC = () => {
       </div>
 
       {/* 4. Tab Panes */}
+
+      {/* TAB 1: AUCTIONS */}
       {activeTab === 'auctions' && (
         <div className="space-y-4">
-          {/* Filter Bar */}
+          {/* Filter & Search Bar */}
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3 rounded-xl border border-slate-200 text-xs">
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-slate-400 font-bold">Filter:</span>
+              <span className="text-slate-400 font-bold text-xs">Status:</span>
               <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg">
                 {(['all', 'live', 'scheduled', 'ended'] as const).map((st) => (
                   <button
@@ -246,18 +291,17 @@ export const CustomerDashboard: React.FC = () => {
                 ))}
               </div>
             </div>
-            <input
-              type="text"
-              placeholder="Search by tender ID, title, or destination..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="border border-slate-300 px-3 py-1.5 rounded-lg text-xs w-full sm:w-72"
+            <SearchBar
+              value={auctionSearch}
+              onChange={setAuctionSearch}
+              placeholder="Search by tender ID, title, category, destination..."
+              className="w-full sm:w-80"
             />
           </div>
 
           {filteredAuctions.length === 0 ? (
             <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl bg-white text-xs text-slate-400">
-              No matching auctions found.
+              No auctions match your current filters.
             </div>
           ) : (
             filteredAuctions.map((auc) => {
@@ -355,97 +399,141 @@ export const CustomerDashboard: React.FC = () => {
         </div>
       )}
 
+      {/* TAB 2: DELIVERY PLANTS */}
       {activeTab === 'facilities' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
             <div>
-              <h3 className="font-bold text-slate-800 text-xs">Corporate Delivery Sites & Plants</h3>
+              <h3 className="font-bold text-slate-800 text-xs">Corporate Delivery Sites & Plants ({facilities.length})</h3>
               <p className="text-[11px] text-slate-400">Manage plant destinations available for tender delivery.</p>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsAddFacilityOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <span>+</span> Add Plant / Facility
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {facilities.map((f) => (
-              <div key={f.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2 text-xs flex flex-col justify-between">
-                <div>
-                  <div className="flex items-start justify-between">
-                    <strong className="text-slate-900 block font-bold text-sm">{f.facility_name}</strong>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteFacility(f.id)}
-                      className="text-slate-300 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 cursor-pointer"
-                      title="Delete Facility"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                  <span className="text-slate-500 block font-medium mt-0.5">{f.city}, {f.state}</span>
-                  <p className="text-[11px] text-slate-400 pt-1 leading-snug">{f.address || 'Standard plant access requirements apply.'}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'suppliers' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-slate-200">
-            <div>
-              <h3 className="font-bold text-slate-800 text-xs">Vetted Supplier Network</h3>
-              <p className="text-[11px] text-slate-400">Suppliers authorized to receive tender invitations from your corporate pool.</p>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <SearchBar
+                value={facilitySearch}
+                onChange={setFacilitySearch}
+                placeholder="Search plants by name, city, state..."
+                className="w-full sm:w-64"
+              />
+              <button
+                type="button"
+                onClick={() => setIsAddFacilityOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1 whitespace-nowrap cursor-pointer shadow-xs"
+              >
+                <span>+</span> Add Plant
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => setIsAddSupplierOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
-            >
-              <span>+</span> Add New Supplier
-            </button>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {suppliers.map((v) => (
-              <div key={v.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2 text-xs">
-                <div className="flex items-center justify-between">
-                  <strong className="text-slate-900 text-sm font-bold">{v.company_name}</strong>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-200">
-                      APPROVED
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSupplier(v.id)}
-                      className="text-slate-300 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 cursor-pointer"
-                      title="Remove from pool"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                </div>
-                <span className="text-slate-600 block">{v.contact_person} • {v.phone}</span>
-                <span className="text-slate-400 font-mono text-[11px] block">{v.email}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {activeTab === 'amendments' && (
-        <div className="space-y-3">
-          {amendments.length === 0 ? (
-            <div className="p-8 text-center bg-white rounded-xl border border-dashed border-slate-200 text-xs text-slate-400">
-              No amendment requests recorded yet.
+          {filteredFacilities.length === 0 ? (
+            <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl bg-white text-xs text-slate-400">
+              No delivery facilities found matching your search.
             </div>
           ) : (
-            amendments.map((a) => (
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {filteredFacilities.map((f) => (
+                <div key={f.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2 text-xs flex flex-col justify-between hover:border-slate-300 transition-colors">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <strong className="text-slate-900 block font-bold text-sm">{f.facility_name}</strong>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteFacility(f.id)}
+                        className="text-slate-300 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 cursor-pointer"
+                        title="Delete Facility"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <span className="text-slate-500 block font-medium mt-0.5">{f.city}, {f.state}</span>
+                    <p className="text-[11px] text-slate-400 pt-1 leading-snug">{f.address || 'Standard plant access requirements apply.'}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: AUTHORIZED SUPPLIERS */}
+      {activeTab === 'suppliers' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
+            <div>
+              <h3 className="font-bold text-slate-800 text-xs">Vetted Supplier Network ({suppliers.length})</h3>
+              <p className="text-[11px] text-slate-400">Suppliers authorized to receive tender invitations from your corporate pool.</p>
+            </div>
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <SearchBar
+                value={supplierSearch}
+                onChange={setSupplierSearch}
+                placeholder="Search vendors by name, email, contact..."
+                className="w-full sm:w-64"
+              />
+              <button
+                type="button"
+                onClick={() => setIsAddSupplierOpen(true)}
+                className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-colors flex items-center gap-1 whitespace-nowrap cursor-pointer shadow-xs"
+              >
+                <span>+</span> Add Supplier
+              </button>
+            </div>
+          </div>
+
+          {filteredSuppliers.length === 0 ? (
+            <div className="text-center py-10 border border-dashed border-slate-200 rounded-xl bg-white text-xs text-slate-400">
+              No suppliers found matching your search.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {filteredSuppliers.map((v) => (
+                <div key={v.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2 text-xs hover:border-slate-300 transition-colors">
+                  <div className="flex items-center justify-between">
+                    <strong className="text-slate-900 text-sm font-bold">{v.company_name}</strong>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-200">
+                        APPROVED
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSupplier(v.id)}
+                        className="text-slate-300 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 cursor-pointer"
+                        title="Remove from pool"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  <span className="text-slate-600 block">{v.contact_person} • {v.phone}</span>
+                  <span className="text-slate-400 font-mono text-[11px] block">{v.email}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 4: AMENDMENTS HISTORY */}
+      {activeTab === 'amendments' && (
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white p-3.5 rounded-xl border border-slate-200">
+            <div>
+              <h3 className="font-bold text-slate-800 text-xs">Tender Amendments History ({amendments.length})</h3>
+              <p className="text-[11px] text-slate-400">All governed specification and schedule revisions submitted to the desk.</p>
+            </div>
+            <SearchBar
+              value={amendmentSearch}
+              onChange={setAmendmentSearch}
+              placeholder="Search by amendment ID, tender title, reason..."
+              className="w-full sm:w-80"
+            />
+          </div>
+
+          {filteredAmendments.length === 0 ? (
+            <div className="p-8 text-center bg-white rounded-xl border border-dashed border-slate-200 text-xs text-slate-400">
+              No amendment requests found matching your query.
+            </div>
+          ) : (
+            filteredAmendments.map((a) => (
               <div key={a.id} className="bg-white p-4 rounded-xl border border-slate-200 shadow-2xs space-y-2 text-xs">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
