@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import { CustomerDashboard } from './pages/CustomerDashboard';
+import { TenderCreationWizard } from './pages/TenderCreationWizard';
 import { NotificationBell } from '../components/NotificationBell';
 import { Organization } from '../types/procurement';
 
@@ -47,12 +48,12 @@ const CustomerLayout: React.FC = () => {
 
           <div className="flex items-center gap-3 text-xs">
             <NotificationBell realm="customer" onNavigate={(url) => navigate(url)} />
-            <a
-              href="/customer/request-tender"
+            <Link
+              to="/customer/request-tender"
               className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1"
             >
               <span>➕</span> New Tender Intake
-            </a>
+            </Link>
             <button
               type="button"
               onClick={handleLogout}
@@ -68,6 +69,7 @@ const CustomerLayout: React.FC = () => {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 flex-1 w-full">
         <Routes>
           <Route path="/customer/dashboard" element={<CustomerDashboard />} />
+          <Route path="/customer/request-tender" element={<TenderCreationWizard />} />
           <Route path="/customer/*" element={<Navigate to="/customer/dashboard" replace />} />
         </Routes>
       </main>

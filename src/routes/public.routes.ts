@@ -66,9 +66,7 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
 
   router.get('/customer', customerAuth, (_req, res) => res.redirect('/customer/dashboard'));
   router.get('/customer/dashboard', customerAuth, sendCustomerBundle);
-  router.get('/customer/request-tender', customerAuth, (_req, res) => {
-    res.sendFile(path.resolve('private/customer/request-tender.html'));
-  });
+  router.get('/customer/request-tender', customerAuth, sendCustomerBundle);
   router.get('/customer/auctions/:id', customerAuth, (_req, res) => {
     res.sendFile(path.resolve('private/customer/auction-detail.html'));
   });
