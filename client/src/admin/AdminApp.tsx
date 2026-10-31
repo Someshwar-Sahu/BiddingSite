@@ -5,6 +5,7 @@ import { ClientsManager } from './pages/ClientsManager';
 import { VendorsManager } from './pages/VendorsManager';
 import { AuctionBuilder } from './pages/AuctionBuilder';
 import { NotificationBell } from '../components/NotificationBell';
+import { AdminLogin } from './AdminLogin';
 
 const AdminLayout: React.FC = () => {
   const navigate = useNavigate();
@@ -107,6 +108,11 @@ const AdminLayout: React.FC = () => {
 };
 
 export const AdminApp: React.FC = () => {
+  const isLoginPage = window.location.pathname === '/admin/login';
+  if (isLoginPage) {
+    return <AdminLogin />;
+  }
+
   return (
     <BrowserRouter>
       <AdminLayout />

@@ -65,6 +65,8 @@ export const VendorsManager: React.FC = () => {
     url: string;
     onboardingType: string;
     vendorName: string;
+    emailSent?: boolean;
+    emailError?: string | null;
   } | null>(null);
 
   const showAlert = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
@@ -287,6 +289,8 @@ export const VendorsManager: React.FC = () => {
         url: data.inviteUrl,
         onboardingType: data.onboardingType,
         vendorName: data.vendor.company_name,
+        emailSent: data.emailSent,
+        emailError: data.emailError,
       });
 
       showAlert(data.message, 'success');
@@ -630,6 +634,26 @@ export const VendorsManager: React.FC = () => {
                       ? 'Pre-verified company details saved. The supplier only needs to create their access PIN.'
                       : 'Self-registration link created. The supplier will fill their legal KYC details and await your approval.'}
                   </p>
+
+                  {/* Real-time Email Dispatch Status Indicator */}
+                  {generatedInviteResult.emailSent ? (
+                    <div className="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-100/80 border border-emerald-300 text-emerald-900 text-[11px] font-semibold">
+                      <span>✉️</span>
+                      <span>Live transactional email successfully dispatched to supplier mailbox!</span>
+                    </div>
+                  ) : generatedInviteResult.emailError ? (
+                    <div className="p-2.5 rounded-lg bg-amber-50 border border-amber-300 text-amber-900 text-[11px] space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-800">
+                        <span>⚠️</span>
+                        <span>Email Gateway Notice:</span>
+                      </div>
+                      <p className="text-slate-700">{generatedInviteResult.emailError}</p>
+                      <p className="text-slate-500 text-[10px]">
+                        Tip: On Resend test mode, emails can only be sent to your registered account email. You can copy and share the direct link below directly!
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div className="pt-2">
                     <label className="text-[10px] text-slate-400 font-bold block mb-1 uppercase tracking-wider">
                       Personalized Access Link

@@ -8,7 +8,7 @@ import { generateAuctionReportPdf } from '../report-generator.js';
 import { requireCustomerAuth, requireAdminAuth, hashPassword } from '../auth.js';
 import { Server as SocketIOServer } from 'socket.io';
 import { createNotification } from '../notifications.js';
-import { sendSupplierOnboardingInviteEmail } from '../email-service.js';
+import { sendSupplierOnboardingInviteEmail, sendAuctionInvitationEmail } from '../email-service.js';
 
 function safeJsonParse<T>(val: any, fallback: T): T {
   if (!val) return fallback;
@@ -575,7 +575,7 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
   });
 
   // Add a vendor to company's vetted supplier pool (Dual-Track Enterprise Onboarding)
-  router.post('/customer/vendors', (req, res) => {
+  router.post('/customer/vendors', async (req, res) => {
     try {
       const org_id = (req as any).customerOrgId || req.body.org_id;
       const { company_name, contact_person, email, phone, gstin, pan } = req.body;
@@ -667,7 +667,7 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
           : `${baseUrl}/vendor/onboard?token=${inviteToken}`;
 
       // Dispatch automated transactional invitation email
-      sendSupplierOnboardingInviteEmail(cleanEmail, vendor.company_name, inviteUrl, effectiveType).catch(() => {});
+      const emailResult = await sendSupplierOnboardingInviteEmail(cleanEmail, vendor.company_name, inviteUrl, effectiveType);
 
       res.json({
         success: true,
@@ -675,6 +675,8 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
         status: vendor.status,
         onboardingType: effectiveType,
         inviteUrl,
+        emailSent: emailResult.success,
+        emailError: emailResult.error || null,
         message: hasFullLegal
           ? `Supplier "${vendor.company_name}" authorized. PIN setup invitation dispatched to ${cleanEmail}.`
           : `Supplier "${vendor.company_name}" added as Unregistered. KYC registration invitation dispatched to ${cleanEmail}.`,
@@ -1427,6 +1429,20 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
         ...v,
         magicUrl: buildAccessUrl(baseUrl, auctionId, v.token, 'vendor')
       }));
+
+      // Automatically dispatch live auction invitations to all assigned suppliers
+      for (const vi of vendorInvites) {
+        if (vi.email) {
+          sendAuctionInvitationEmail(
+            vi.email,
+            vi.company_name,
+            auctionId,
+            request.title,
+            scheduledStart.toISOString(),
+            vi.magicUrl
+          ).catch((err) => console.error(`Error emailing converted supplier ${vi.email}:`, err));
+        }
+      }
 
       res.json({
         success: true,

@@ -259,6 +259,9 @@ export function initializeDatabase(dbPath: string = ':memory:'): Database.Databa
     if (!vndCols.has('onboarding_token_expires_at')) {
       db.exec('ALTER TABLE vendors ADD COLUMN onboarding_token_expires_at DATETIME;');
     }
+    if (!vndCols.has('token_history')) {
+      db.exec('ALTER TABLE vendors ADD COLUMN token_history TEXT;');
+    }
 
     // 4. Migrate platform_users (job_title, phone, status)
     const usrInfo = db.prepare("PRAGMA table_info('platform_users')").all() as any[];

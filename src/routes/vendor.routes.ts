@@ -25,8 +25,10 @@ export function createVendorPortalRouter(db: Database.Database, getPresenceCheck
         return res.status(400).json({ error: 'Onboarding invitation token is required.' });
       }
 
-      // Check vendors table by onboarding_token
-      let vendor = db.prepare('SELECT * FROM vendors WHERE onboarding_token = ?').get(token) as any;
+      // Check vendors table by onboarding_token OR token_history
+      let vendor = db
+        .prepare("SELECT * FROM vendors WHERE onboarding_token = ? OR instr(COALESCE(token_history, ''), ?) > 0")
+        .get(token, token) as any;
 
       // Fallback: check auction_invites table
       if (!vendor) {
@@ -41,6 +43,21 @@ export function createVendorPortalRouter(db: Database.Database, getPresenceCheck
       if (!vendor) {
         return res.status(404).json({
           error: 'Invalid or expired onboarding invitation link. Please request a new invite from the operations desk.',
+        });
+      }
+
+      // Check if vendor already completed onboarding
+      if (vendor.status === 'approved' || vendor.status === 'pending_approval') {
+        return res.json({
+          valid: true,
+          alreadyRegistered: true,
+          status: vendor.status,
+          vendor: {
+            id: vendor.id,
+            companyName: vendor.company_name || '',
+            email: vendor.email,
+            status: vendor.status,
+          },
         });
       }
 
@@ -84,7 +101,9 @@ export function createVendorPortalRouter(db: Database.Database, getPresenceCheck
       }
 
       // Find vendor
-      let vendor = db.prepare('SELECT * FROM vendors WHERE onboarding_token = ?').get(String(token).trim()) as any;
+      let vendor = db
+        .prepare("SELECT * FROM vendors WHERE onboarding_token = ? OR instr(COALESCE(token_history, ''), ?) > 0")
+        .get(String(token).trim(), String(token).trim()) as any;
       if (!vendor) {
         const invite = db
           .prepare('SELECT vendor_id FROM auction_invites WHERE token = ? AND is_revoked = 0')
@@ -97,6 +116,18 @@ export function createVendorPortalRouter(db: Database.Database, getPresenceCheck
       if (!vendor) {
         return res.status(404).json({ error: 'Invalid or expired onboarding token.' });
       }
+
+      if (vendor.status === 'approved' || vendor.status === 'pending_approval') {
+        return res.status(400).json({
+          error: `This supplier account is already ${vendor.status === 'approved' ? 'approved' : 'pending review'}. Please log in.`,
+        });
+      }
+
+      const existingHistory = vendor.token_history || '';
+      const tokenStr = String(token).trim();
+      const updatedHistory = existingHistory
+        ? (existingHistory.includes(tokenStr) ? existingHistory : `${existingHistory},${tokenStr}`)
+        : tokenStr;
 
       const hasFullDetails = Boolean(
         vendor.gstin && vendor.pan && vendor.contact_person && vendor.contact_person !== 'Representative'
@@ -129,9 +160,9 @@ export function createVendorPortalRouter(db: Database.Database, getPresenceCheck
         // Update vendor details and set to pending_approval for admin verification
         db.prepare(`
           UPDATE vendors 
-          SET company_name = ?, contact_person = ?, phone = ?, gstin = ?, pan = ?, address = ?, password_hash = ?, status = 'pending_approval', onboarding_token = NULL
+          SET company_name = ?, contact_person = ?, phone = ?, gstin = ?, pan = ?, address = ?, password_hash = ?, status = 'pending_approval', onboarding_token = NULL, token_history = ?
           WHERE id = ?
-        `).run(compName, contact, ph, gst, pn, addr, pinHash, vendor.id);
+        `).run(compName, contact, ph, gst, pn, addr, pinHash, updatedHistory, vendor.id);
 
         // Ensure user in platform_users
         const uId = `usr_${vendor.id}`;
@@ -153,9 +184,9 @@ export function createVendorPortalRouter(db: Database.Database, getPresenceCheck
         // PIN Setup Only -> Direct Activation
         db.prepare(`
           UPDATE vendors 
-          SET password_hash = ?, status = 'approved', onboarding_token = NULL
+          SET password_hash = ?, status = 'approved', onboarding_token = NULL, token_history = ?
           WHERE id = ?
-        `).run(pinHash, vendor.id);
+        `).run(pinHash, updatedHistory, vendor.id);
 
         const uId = `usr_${vendor.id}`;
         try {

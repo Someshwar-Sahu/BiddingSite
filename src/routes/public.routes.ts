@@ -23,18 +23,6 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
   // ==========================================
   // REALM 1: ADMIN OPERATIONS DESK (ISOLATED)
   // ==========================================
-  router.get('/admin/login', (req, res) => {
-    const cookies = parseCookies(req.headers.cookie);
-    const token = cookies['nta_admin_session'];
-    if (token && validateSession(db, token, 'admin')) {
-      return res.redirect('/admin/auctions');
-    }
-    res.sendFile(path.resolve('private/admin/login.html'));
-  });
-
-  // Guard all admin page views with requireAdminAuth
-  const adminAuth = requireAdminAuth(db);
-
   const sendAdminBundle = (_req: any, res: any) => {
     const viteDistTop = path.resolve('dist/client/admin.html');
     const viteDistNested = path.resolve('dist/client/client/admin.html');
@@ -51,6 +39,26 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
     res.status(500).send('Customer React bundle not found. Please run: npm run build:client');
   };
 
+  const sendLandingBundle = (_req: any, res: any) => {
+    const viteDistTop = path.resolve('dist/client/index.html');
+    const viteDistNested = path.resolve('dist/client/client/index.html');
+    if (fs.existsSync(viteDistTop)) return res.sendFile(viteDistTop);
+    if (fs.existsSync(viteDistNested)) return res.sendFile(viteDistNested);
+    res.redirect('/admin/auctions');
+  };
+
+  router.get('/admin/login', (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies['nta_admin_session'];
+    if (token && validateSession(db, token, 'admin')) {
+      return res.redirect('/admin/auctions');
+    }
+    return sendAdminBundle(req, res);
+  });
+
+  // Guard all admin page views with requireAdminAuth
+  const adminAuth = requireAdminAuth(db);
+
   router.get('/admin', adminAuth, (_req, res) => res.redirect('/admin/auctions'));
   router.get('/admin/auctions', adminAuth, sendAdminBundle);
   router.get('/admin/auction-editor', adminAuth, sendAdminBundle);
@@ -66,7 +74,7 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
     if (token && validateSession(db, token, 'customer')) {
       return res.redirect('/customer/dashboard');
     }
-    res.sendFile(path.resolve('public/customer/login.html'));
+    return sendCustomerBundle(req, res);
   });
 
   const customerAuth = requireCustomerAuth(db);
@@ -257,7 +265,21 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
 
   router.get('/live-auction/:id', handleVendorBiddingAccess);
   router.get('/auction/:id', handleVendorBiddingAccess);
-  router.get('/', (_req, res) => res.redirect('/admin/auctions'));
+
+  // Unified Home Gateway Landing Page
+  router.get('/', (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    if (cookies['nta_admin_session'] && validateSession(db, cookies['nta_admin_session'], 'admin')) {
+      return res.redirect('/admin/auctions');
+    }
+    if (cookies['nta_customer_session'] && validateSession(db, cookies['nta_customer_session'], 'customer')) {
+      return res.redirect('/customer/dashboard');
+    }
+    if (cookies['nta_vendor_session'] && validateSession(db, cookies['nta_vendor_session'], 'vendor')) {
+      return res.redirect('/vendor/dashboard');
+    }
+    return sendLandingBundle(req, res);
+  });
 
   // Live bidding room state & audit log
   router.get('/api/auctions/:id/room-state', (req, res) => {

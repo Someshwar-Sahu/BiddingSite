@@ -4,6 +4,7 @@ import { CustomerDashboard } from './pages/CustomerDashboard';
 import { TenderCreationWizard } from './pages/TenderCreationWizard';
 import { NotificationBell } from '../components/NotificationBell';
 import { Organization } from '../types/procurement';
+import { CustomerLogin } from './CustomerLogin';
 
 const CustomerLayout: React.FC = () => {
   const [org, setOrg] = useState<Organization | null>(null);
@@ -78,6 +79,11 @@ const CustomerLayout: React.FC = () => {
 };
 
 export const CustomerApp: React.FC = () => {
+  const isLoginPage = window.location.pathname === '/customer/login';
+  if (isLoginPage) {
+    return <CustomerLogin />;
+  }
+
   return (
     <BrowserRouter>
       <CustomerLayout />

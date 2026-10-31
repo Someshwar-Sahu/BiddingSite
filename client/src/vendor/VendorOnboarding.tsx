@@ -20,6 +20,8 @@ export const VendorOnboarding: React.FC = () => {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [submittedSuccess, setSubmittedSuccess] = useState<boolean>(false);
+  const [alreadyRegistered, setAlreadyRegistered] = useState<boolean>(false);
+  const [registeredStatus, setRegisteredStatus] = useState<string>('');
 
   const [onboardingType, setOnboardingType] = useState<'full' | 'pin_only'>('full');
   const [vendor, setVendor] = useState<VendorData | null>(null);
@@ -53,6 +55,12 @@ export const VendorOnboarding: React.FC = () => {
         return data;
       })
       .then((data) => {
+        if (data.alreadyRegistered) {
+          setAlreadyRegistered(true);
+          setRegisteredStatus(data.status || 'pending_approval');
+          setVendor(data.vendor);
+          return;
+        }
         setOnboardingType(data.onboardingType || 'full');
         setVendor(data.vendor);
         if (data.vendor) {
@@ -177,6 +185,22 @@ export const VendorOnboarding: React.FC = () => {
             <div className="py-12 text-center text-slate-400 space-y-3">
               <span className="inline-block animate-spin text-3xl">🔄</span>
               <p className="text-xs">Verifying invitation credentials...</p>
+            </div>
+          ) : alreadyRegistered ? (
+            <div className="text-center py-6 space-y-4">
+              <div className="text-5xl">ℹ️</div>
+              <h2 className="text-xl font-bold text-white">Account Already Registered</h2>
+              <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
+                This supplier account (<strong className="text-white">{vendor?.companyName || vendor?.email}</strong>) has already completed registration and its status is <strong className="text-emerald-400 uppercase tracking-wide">{registeredStatus.replace('_', ' ')}</strong>.
+              </p>
+              <div className="pt-3">
+                <a
+                  href="/vendor/login"
+                  className="inline-block bg-blue-600 hover:bg-blue-500 text-white font-bold px-6 py-2.5 rounded-xl text-xs shadow-lg shadow-blue-600/30 transition-all"
+                >
+                  Go to Supplier Portal Login →
+                </a>
+              </div>
             </div>
           ) : loadError ? (
             <div className="text-center py-8 space-y-4">

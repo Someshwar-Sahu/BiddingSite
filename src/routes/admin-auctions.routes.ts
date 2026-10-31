@@ -11,6 +11,7 @@ import {
   sendSupplierOnboardingInviteEmail,
   sendKycApprovalEmail,
   sendAuctionInvitationEmail,
+  sendAuctionUpdateNotificationEmail,
 } from '../email-service.js';
 
 /**
@@ -299,6 +300,25 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
 
     try {
       transaction();
+
+      // Dispatch automated transactional invitations to all assigned suppliers
+      const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const createdInvites = db.prepare(`
+        SELECT ai.token, v.company_name, v.email
+        FROM auction_invites ai
+        JOIN vendors v ON ai.vendor_id = v.id
+        WHERE ai.auction_id = ? AND ai.role = 'vendor'
+      `).all(id) as any[];
+
+      for (const inv of createdInvites) {
+        if (inv.email) {
+          const accessUrl = buildAccessUrl(baseUrl, id, inv.token);
+          sendAuctionInvitationEmail(inv.email, inv.company_name, id, title, start.toISOString(), accessUrl).catch((err) =>
+            console.error(`Error emailing invited supplier ${inv.email}:`, err)
+          );
+        }
+      }
+
       res.json({ success: true, auctionId: id });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -400,6 +420,32 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
         target_url: `/customer/dashboard?auctionId=${auctionId}`,
       });
 
+      // If notify_vendors was checked by the Admin, dispatch update notification emails
+      if (notify_vendors === true) {
+        const invites = db.prepare(`
+          SELECT ai.token, v.company_name, v.email
+          FROM auction_invites ai
+          JOIN vendors v ON ai.vendor_id = v.id
+          WHERE ai.auction_id = ? AND ai.role = 'vendor' AND ai.is_revoked = 0
+        `).all(auctionId) as any[];
+
+        const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+        for (const inv of invites) {
+          if (inv.email) {
+            const accessUrl = buildAccessUrl(baseUrl, auctionId, inv.token);
+            sendAuctionUpdateNotificationEmail(
+              inv.email,
+              inv.company_name,
+              auctionId,
+              title || existing.title || auctionId,
+              start.toISOString(),
+              duration,
+              accessUrl
+            ).catch((err) => console.error(`Error notifying supplier ${inv.email}:`, err));
+          }
+        }
+      }
+
       res.json({
         success: true,
         message: `Auction ${auctionId} updated successfully.`,
@@ -480,7 +526,7 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
   });
 
   // 7a. Invite New Supplier (Track A: Email-Only or Track B: Pre-filled PIN Setup)
-  router.post('/vendors/invite', (req, res) => {
+  router.post('/vendors/invite', async (req, res) => {
     try {
       const { email, company_name, contact_person, phone, gstin, pan, address, company_id } = req.body;
       if (!email || !email.trim()) {
@@ -490,7 +536,19 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
       const cleanEmail = email.trim().toLowerCase();
       let vendor = db.prepare('SELECT * FROM vendors WHERE LOWER(email) = ?').get(cleanEmail) as any;
 
-      const token = 'vtok_' + generateMagicToken();
+      // Reuse existing valid token if still active, otherwise generate a fresh token
+      let token = vendor?.onboarding_token;
+      const isExpired = vendor?.onboarding_token_expires_at && new Date(vendor.onboarding_token_expires_at).getTime() < Date.now();
+      if (!token || isExpired) {
+        token = 'vtok_' + generateMagicToken();
+      }
+
+      // Preserve previous token in history so previously emailed links never become 404
+      let tokenHistory = vendor?.token_history || '';
+      if (vendor?.onboarding_token && vendor.onboarding_token !== token) {
+        tokenHistory = tokenHistory ? `${tokenHistory},${vendor.onboarding_token}` : vendor.onboarding_token;
+      }
+
       const tokenExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
       const hasAllDetails = Boolean(gstin?.trim() && pan?.trim() && contact_person?.trim());
       const onboardingType = hasAllDetails ? 'pin_only' : 'full';
@@ -499,8 +557,8 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
       if (!vendor) {
         const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         db.prepare(`
-          INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, address, onboarding_token, onboarding_type, onboarding_token_expires_at, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, address, onboarding_token, onboarding_type, onboarding_token_expires_at, token_history, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           vId,
           (company_name || cleanEmail.split('@')[0]).trim(),
@@ -513,14 +571,16 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
           token,
           onboardingType,
           tokenExpiry,
+          tokenHistory || null,
           initialStatus
         );
         vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vId) as any;
       } else {
-        // Refresh token for existing vendor
+        // Refresh token for existing vendor while preserving token history
         db.prepare(`
           UPDATE vendors 
           SET onboarding_token = ?, onboarding_type = ?, onboarding_token_expires_at = ?,
+              token_history = ?,
               company_name = COALESCE(?, company_name),
               contact_person = CASE WHEN contact_person = 'Representative' AND ? IS NOT NULL THEN ? ELSE contact_person END,
               gstin = COALESCE(?, gstin),
@@ -530,6 +590,7 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
           token,
           onboardingType,
           tokenExpiry,
+          tokenHistory || null,
           company_name ? company_name.trim() : null,
           contact_person ? contact_person.trim() : null,
           contact_person ? contact_person.trim() : null,
@@ -551,7 +612,7 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
           : `${baseUrl}/vendor/onboard?token=${token}`;
 
       // Dispatch automated transactional invitation email
-      sendSupplierOnboardingInviteEmail(cleanEmail, vendor.company_name, inviteUrl, onboardingType).catch(() => {});
+      const emailResult = await sendSupplierOnboardingInviteEmail(cleanEmail, vendor.company_name, inviteUrl, onboardingType);
 
       res.json({
         success: true,
@@ -559,6 +620,8 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
         token,
         onboardingType,
         inviteUrl,
+        emailSent: emailResult.success,
+        emailError: emailResult.error || null,
         message:
           onboardingType === 'pin_only'
             ? 'Supplier pre-registered! Link generated for PIN setup only.'

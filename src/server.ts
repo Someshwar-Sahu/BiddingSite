@@ -88,9 +88,9 @@ export function createAuctionServer(db: Database.Database): ServerInstance {
     requireVendorAuth(db)(req, res, next);
   });
 
-  // Serve Vite React build output and public assets
-  app.use(express.static('dist/client'));
-  app.use(express.static('public'));
+  // Serve Vite React build output and public assets without directory index hijacking
+  app.use(express.static('dist/client', { index: false }));
+  app.use(express.static('public', { index: false }));
 
   const httpServer = http.createServer(app);
   const io = new SocketIOServer(httpServer, {
