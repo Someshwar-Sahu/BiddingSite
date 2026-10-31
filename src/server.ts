@@ -8,10 +8,18 @@ import { createPublicRouter } from './routes/public.routes.js';
 import { createAdminCompaniesRouter } from './routes/admin-companies.routes.js';
 import { createAdminAuctionsRouter } from './routes/admin-auctions.routes.js';
 import { createCustomerRequestsRouter } from './routes/customer-requests.routes.js';
+import { createVendorPortalRouter } from './routes/vendor.routes.js';
 import { createAuthRouter } from './routes/auth.routes.js';
 import { createNotificationsRouter } from './notifications.js';
-import { requireAdminAuth, requireCustomerAuth, seedDefaultUsers, parseCookies, validateSession } from './auth.js';
-import { registerAuctionSockets } from './sockets/auction-socket.js';
+import {
+  requireAdminAuth,
+  requireCustomerAuth,
+  requireVendorAuth,
+  seedDefaultUsers,
+  parseCookies,
+  validateSession,
+} from './auth.js';
+import { registerAuctionSockets, isVendorPresentInAuction } from './sockets/auction-socket.js';
 import { startAuctionTicker } from './sockets/clock-ticker.js';
 import path from 'path';
 
@@ -63,6 +71,23 @@ export function createAuctionServer(db: Database.Database): ServerInstance {
     requireCustomerAuth(db)(req, res, next);
   });
 
+  // Realm 3 Firewall: Intercept and guard all /vendor paths before static assets
+  app.use('/vendor', (req, res, next) => {
+    const publicVendorPaths = ['/login', '/register', '/onboard', '/setup-pin'];
+    if (publicVendorPaths.includes(req.path)) {
+      // If visiting /login without any setup action and session exists, redirect to dashboard
+      if (req.path === '/login' && !req.query.token && !req.query.key) {
+        const cookies = parseCookies(req.headers.cookie);
+        const token = cookies['nta_vendor_session'];
+        if (token && validateSession(db, token, 'vendor')) {
+          return res.redirect('/vendor/dashboard');
+        }
+      }
+      return next();
+    }
+    requireVendorAuth(db)(req, res, next);
+  });
+
   // Serve Vite React build output and public assets
   app.use(express.static('dist/client'));
   app.use(express.static('public'));
@@ -80,6 +105,7 @@ export function createAuctionServer(db: Database.Database): ServerInstance {
   app.use('/', createPublicRouter(repo, db));
   app.use('/api/admin', requireAdminAuth(db), createAdminCompaniesRouter(db));
   app.use('/api/admin', requireAdminAuth(db), createAdminAuctionsRouter(db, repo, io));
+  app.use('/api/vendor', createVendorPortalRouter(db, isVendorPresentInAuction));
   app.use('/api', createCustomerRequestsRouter(db, io));
 
   // Mount real-time WebSockets

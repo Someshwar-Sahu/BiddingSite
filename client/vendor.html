@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NexTrade Auctions — Live Reverse Bidding Room</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    a {
+      text-decoration: none;
+    }
+    .btn-white,
+    .btn-white:visited,
+    .btn-white:hover,
+    .btn-white:active,
+    a.btn-white,
+    a.btn-white:visited,
+    a.btn-white:hover,
+    a.btn-white:active {
+      color: #ffffff !important;
+    }
+    .btn-slate,
+    .btn-slate:visited,
+    .btn-slate:hover,
+    .btn-slate:active,
+    a.btn-slate,
+    a.btn-slate:visited,
+    a.btn-slate:hover,
+    a.btn-slate:active {
+      color: #334155 !important;
+    }
+    @keyframes flashGreen {
+      0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      50% { transform: scale(1.05); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+    .flash-bid {
+      animation: flashGreen 1.2s ease-in-out;
+    }
+    @keyframes pulseAlert {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    .pulse-outbid {
+      animation: pulseAlert 1.5s infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 antialiased min-h-screen">
+  <div id="root"></div>
+  <script type="module" src="./src/vendor/main.tsx"></script>
+</body>
+</html>

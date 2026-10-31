@@ -141,6 +141,19 @@ export const AddSupplierModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }
             </div>
           </div>
 
+          {/* Dual-Track Enterprise Guidance */}
+          <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-500 space-y-1">
+            <div className="flex items-center gap-1.5 font-semibold text-slate-700">
+              <span>💡</span> Dual-Track Supplier Onboarding:
+            </div>
+            <p>
+              • <strong>GSTIN & PAN Provided:</strong> Supplier is pre-approved and receives an email invitation to set their confidential 6-digit access PIN.
+            </p>
+            <p>
+              • <strong>Tax Details Left Blank:</strong> Supplier receives an email invitation to complete their legal business registration and submit tax credentials for NexTrade Operations Desk review.
+            </p>
+          </div>
+
           <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
             <button
               type="button"
@@ -152,9 +165,9 @@ export const AddSupplierModal: React.FC<Props> = ({ isOpen, onClose, onSuccess }
             <button
               type="submit"
               disabled={saving}
-              className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition-colors cursor-pointer disabled:opacity-50"
+              className="px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
             >
-              {saving ? 'Adding...' : 'Authorize Supplier'}
+              <span>✉️</span> {saving ? 'Dispatching...' : 'Authorize & Send Invite'}
             </button>
           </div>
         </form>

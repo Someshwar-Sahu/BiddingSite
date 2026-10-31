@@ -1,6 +1,10 @@
+import { loadEnv } from './env.js';
+loadEnv();
+
 import { initializeDatabase } from './db.js';
 import { createAuctionServer } from './server.js';
 import { buildAccessUrl } from './magic-link.js';
+import { hashPassword } from './auth.js';
 
 const PORT = process.env.PORT || 3000;
 const BASE_URL = process.env.APP_BASE_URL || `http://localhost:${PORT}`;
@@ -26,13 +30,14 @@ db.prepare(`
     ('fac_noida', 'org_epack', 'Greater Noida Processing Facility', 'Greater Noida', 'Uttar Pradesh', 'Ecotech III, Greater Noida')
 `).run();
 
-// Seed Master Vendors
+// Seed Default Verified Enterprise Suppliers (if not already registered)
+const defaultVendorPin = hashPassword('123456');
 db.prepare(`
-  INSERT OR IGNORE INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, status)
+  INSERT OR IGNORE INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, password_hash, status)
   VALUES 
-    ('vnd_gold', 'Gold Global Fuels', 'Harsh Vardhan', 'goldglobalfuels@gmail.com', '9876543211', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved'),
-    ('vnd_bridge', 'RS Bridge Consultancy', 'Rahul Sharma', 'rsbridgeconsultancy@gmail.com', '9876543212', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved')
-`).run();
+    ('vnd_gold', 'Gold Global Fuels Pvt Ltd', 'Authorized Signatory', 'goldglobalfuels@gmail.com', '9876543211', '27AAPFU0939F1ZV', 'AAPFU0939F', ?, 'approved'),
+    ('vnd_bridge', 'RS Bridge Consultancy LLP', 'Commercial Lead', 'rsbridgeconsultancy@gmail.com', '9876543212', '27AAPFU0939F1ZV', 'AAPFU0939F', ?, 'approved')
+`).run(defaultVendorPin, defaultVendorPin);
 
 // Ensure historical demo record exists without reviving or modifying it
 db.prepare(`
@@ -126,5 +131,8 @@ httpServer.listen(PORT, () => {
   console.log(`   👉 ${goldUrl}`);
   console.log(`   Vendor B (RS Bridge Consultancy):`);
   console.log(`   👉 ${bridgeUrl}`);
+  console.log('\n🏭 SUPPLIER HUB / VENDOR DASHBOARD:');
+  console.log(`   Login URL:   ${BASE_URL}/vendor/login`);
+  console.log('   Demo PIN:    123456 (for goldglobalfuels@gmail.com)');
   console.log('================================================================\n');
 });

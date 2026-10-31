@@ -955,7 +955,18 @@ export const TenderCreationWizard: React.FC = () => {
                             className="mt-0.5 rounded cursor-pointer"
                           />
                           <div className="flex-1 leading-snug">
-                            <strong className="block text-slate-900 font-bold">{v.company_name}</strong>
+                            <div className="flex items-center justify-between">
+                              <strong className="block text-slate-900 font-bold">{v.company_name}</strong>
+                              <span
+                                className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded border ${
+                                  v.status === 'approved'
+                                    ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                }`}
+                              >
+                                {v.status === 'approved' ? 'KYC Verified' : 'Awaiting KYC'}
+                              </span>
+                            </div>
                             <span className="text-[11px] text-slate-500 block">
                               {v.contact_person} • {v.phone}
                             </span>

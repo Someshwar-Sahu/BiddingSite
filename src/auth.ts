@@ -72,7 +72,7 @@ export function createSession(
 /**
  * Validates a session token and retrieves user identity
  */
-export function validateSession(db: Database.Database, sessionId?: string): UserSession | null {
+export function validateSession(db: Database.Database, sessionId?: string, expectedRole?: string): UserSession | null {
   if (!sessionId) return null;
 
   try {
@@ -87,6 +87,7 @@ export function validateSession(db: Database.Database, sessionId?: string): User
       .get(sessionId) as any;
 
     if (!row) return null;
+    if (expectedRole && row.role !== expectedRole) return null;
 
     return {
       sessionId: row.session_id,
@@ -102,7 +103,7 @@ export function validateSession(db: Database.Database, sessionId?: string): User
 }
 
 /**
- * Seed master demo accounts for Admin and Corporate Buyer
+ * Seed master demo accounts for Admin, Corporate Buyer, and Vetted Suppliers
  */
 export function seedDefaultUsers(db: Database.Database): void {
   try {
@@ -119,8 +120,27 @@ export function seedDefaultUsers(db: Database.Database): void {
       INSERT OR IGNORE INTO platform_users (id, email, password_hash, role, organization_id, full_name)
       VALUES ('usr_epack_01', 'procurement@epack.in', ?, 'customer', 'org_epack', 'Saurabh Verma (Procurement Head)')
     `).run(customerHash);
+
+    // 3. Master Vetted Suppliers (Default PIN: 123456)
+    const vendorPinHash = hashPassword('123456');
+
+    // Update vendors table directly
+    try {
+      db.prepare("UPDATE vendors SET password_hash = ? WHERE id IN ('vnd_gold', 'vnd_bridge')").run(vendorPinHash);
+    } catch {}
+
+    // Register in platform_users (organization_id is NULL because vendors are not in organizations table)
+    db.prepare(`
+      INSERT OR IGNORE INTO platform_users (id, email, password_hash, role, organization_id, full_name)
+      VALUES 
+        ('usr_vnd_gold', 'goldglobalfuels@gmail.com', ?, 'vendor', NULL, 'Gold Global Fuels'),
+        ('usr_vnd_bridge', 'rsbridgeconsultancy@gmail.com', ?, 'vendor', NULL, 'RS Bridge Consultancy')
+    `).run(vendorPinHash, vendorPinHash);
+
+    // Ensure existing user has correct password hash
+    db.prepare("UPDATE platform_users SET password_hash = ? WHERE id IN ('usr_vnd_gold', 'usr_vnd_bridge')").run(vendorPinHash);
   } catch (e) {
-    // Handled if schema not ready
+    console.warn('Notice seeding default users:', e);
   }
 }
 
@@ -129,7 +149,6 @@ export function seedDefaultUsers(db: Database.Database): void {
  */
 export function requireAdminAuth(db: Database.Database) {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Allow test bypass in automated integration test runs if requested
     if (process.env.NODE_ENV === 'test' && (req.headers['x-bypass-auth'] || !req.headers.cookie)) {
       (req as any).adminUser = { id: 'usr_admin_01', role: 'admin', full_name: 'Test Admin' };
       return next();
@@ -143,7 +162,7 @@ export function requireAdminAuth(db: Database.Database) {
       sessionId = authHeader.substring(7).trim();
     }
 
-    const session = validateSession(db, sessionId);
+    const session = validateSession(db, sessionId, 'admin');
     if (!session || session.role !== 'admin') {
       const isApiRequest =
         (req.originalUrl && req.originalUrl.includes('/api/')) ||
@@ -170,7 +189,6 @@ export function requireAdminAuth(db: Database.Database) {
  */
 export function requireCustomerAuth(db: Database.Database) {
   return (req: Request, res: Response, next: NextFunction) => {
-    // Test environment fallback to query parameter if no cookie provided
     if (process.env.NODE_ENV === 'test') {
       const orgQuery = (req.query.orgId as string) || (req.query.org as string) || (req.body?.customer_org_id as string) || 'org_epack';
       (req as any).customerOrgId = orgQuery;
@@ -191,7 +209,7 @@ export function requireCustomerAuth(db: Database.Database) {
       sessionId = authHeader.substring(7).trim();
     }
 
-    const session = validateSession(db, sessionId);
+    const session = validateSession(db, sessionId, 'customer');
     if (!session || session.role !== 'customer') {
       const isApiRequest =
         (req.originalUrl && req.originalUrl.includes('/api/')) ||
@@ -214,3 +232,38 @@ export function requireCustomerAuth(db: Database.Database) {
   };
 }
 
+/**
+ * Middleware: Enforces vendor company authentication for Supplier Hub (/vendor/* and /api/vendor/*)
+ */
+export function requireVendorAuth(db: Database.Database) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const authHeader = req.headers.authorization;
+    let sessionId = cookies['nta_vendor_session'];
+
+    if (!sessionId && authHeader?.startsWith('Bearer ')) {
+      sessionId = authHeader.substring(7).trim();
+    }
+
+    const session = validateSession(db, sessionId, 'vendor');
+    if (!session || session.role !== 'vendor') {
+      const isApiRequest =
+        (req.originalUrl && req.originalUrl.includes('/api/')) ||
+        (req.baseUrl && req.baseUrl.includes('/api')) ||
+        req.path.startsWith('/api/') ||
+        Boolean(req.xhr) ||
+        Boolean(req.headers.accept?.includes('application/json'));
+
+      if (isApiRequest) {
+        return res.status(401).json({
+          error: 'Unauthorized: Supplier authentication required to access Supplier Hub.',
+        });
+      }
+      return res.redirect('/vendor/login');
+    }
+
+    (req as any).vendorId = session.organizationId || session.userId;
+    (req as any).vendorUser = session;
+    next();
+  };
+}

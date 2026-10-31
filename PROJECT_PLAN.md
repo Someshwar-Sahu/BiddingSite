@@ -1,65 +1,58 @@
-# NexTrade Auctions (NTA) — Master Architecture & Execution Plan
+# NexTrade Auctions — Master React Migration & Modular Architecture Plan
 
-**System:** Industrial B2B Reverse E-Auction & Procurement Platform  
-**Target Benchmark:** SAP Ariba / Coupa / PrimeTrade Auctions  
-**Document Status:** Living Master Roadmap (Updated: October 31, 2026)  
-**Primary Workspaces:** `e:\Projects\BiddingSite`
+## 1. Project Overview & Vision
+NexTrade Auctions is an enterprise-grade, low-latency B2B reverse e-auction platform purpose-built for bulk industrial procurement (chemicals, petrochemicals, packaging, heavy commodities). It connects Corporate Buyers (e.g., Epack Petrochem) with vetted suppliers who compete in real-time down to the lowest bid under strict anti-sniping and decrement rules.
 
----
-
-## 1. Executive Summary & Evolutionary Context
-
-NexTrade Auctions is an enterprise-grade, low-latency B2B reverse auction platform designed for industrial procurement. Corporate buyers (e.g. *Epack Petrochem Solutions*) host scheduled reverse auctions for bulk commodities, raw materials, and packaging, allowing pre-vetted vendors to compete in real-time down to the lowest bid (L1).
-
-### The Technology Pivot:
-* **Initial Prototype (Deprecated)**: Began as monolithic Vanilla JavaScript (`dashboard.js`, `auctions.js`) and static HTML (`dashboard.html`, `auctions.html`). This caused severe DOM layering issues, untracked state, stuck browser URL query parameters, and jarring browser alerts (`localhost:3000 says`).
-* **Current Production Standard (Active)**: Migrated to a **Server-Guarded Multi-SPA in React 19 + TypeScript + Vite 8** backed by an **Express 5 + SQLite (`better-sqlite3`) + Socket.io** backend.
-* **Core Principle**: Complete and polish the **Admin Operations Desk** and **Corporate Buyer Workspace** (Phases 1–5) before initiating the **Vendor Bidding Engine** (Phase 6).
+This project executes a **complete ground-up architectural modernization** from a fragmented prototype into a clean, unified **React Multi-SPA application powered by Vite, Tailwind CSS, TypeScript, and Express WebSockets**.
 
 ---
 
-## 2. System Architecture & Security Baseline
+## 2. Platform Architecture & Realm Isolation
 
-```mermaid
-flowchart TD
-    subgraph Express_Backend["Express 5 Security Firewall & Backend (Port 3000)"]
-        FW1["/admin/* Firewall<br/>(requireAdminAuth + Anti-Cache)"]
-        FW2["/customer/* Firewall<br/>(requireCustomerAuth + Anti-Cache)"]
-        DB[(SQLite Embedded Engine<br/>better-sqlite3)]
-        WS["Socket.io Real-Time Hub<br/>(Realm-Isolated Broadcasts)"]
-        PDF["PDFKit Official Audit Report Engine"]
-    end
-
-    subgraph Client_SPAs["Vite Multi-SPA React Frontend (dist/client)"]
-        AdminSPA["Admin Operations Desk<br/>(dist/client/admin.html)"]
-        CustomerSPA["Corporate Buyer Workspace<br/>(dist/client/customer.html)"]
-    end
-
-    FW1 --> AdminSPA
-    FW2 --> CustomerSPA
-    AdminSPA <-->|REST API + Sockets| Express_Backend
-    CustomerSPA <-->|REST API + Sockets| Express_Backend
-    Express_Backend <--> DB
+```
+                   ┌───────────────────────────────────────┐
+                   │          NexTrade Reverse Engine      │
+                   └──────────────────┬────────────────────┘
+                                      │
+         ┌────────────────────────────┼────────────────────────────┐
+         │                            │                            │
+         ▼                            ▼                            ▼
+┌──────────────────┐         ┌──────────────────┐         ┌──────────────────┐
+│     REALM 1      │         │     REALM 2      │         │     REALM 3      │
+│ Admin Operations │         │ Corporate Buyer  │         │ Supplier Network │
+│  (/admin/*)      │         │  (/customer/*)   │         │  (/vendor/* &    │
+│                  │         │                  │         │   /live-auction) │
+├──────────────────┤         ├──────────────────┤         ├──────────────────┤
+│ • Auctions Desk  │         │ • KPI Dashboard  │         │ • Multi-Tender   │
+│ • Client Manager │         │ • 5-Step Intake  │         │   Supplier Hub   │
+│ • Vendor Manager │         │ • Amendments     │         │ • Live Bidding   │
+│ • Auction Builder│         │ • Plants Directory│        │ • Seat Lock Mutex│
+│ • Audit Reports  │         │ • Approved Pool  │         │ • Unmanned Alert │
+└──────────────────┘         └──────────────────┘         └──────────────────┘
 ```
 
-### Architectural Tenets:
-1. **Server-Guarded Multi-SPA**: React client bundles for Admin and Customer are compiled separately into `dist/client/` and served behind strict Express session middleware (`requireAdminAuth` and `requireCustomerAuth`). Unauthenticated users cannot inspect internal bundles.
-2. **Anti-Cache Protection**: HTTP headers (`no-store, no-cache, must-revalidate, max-age=0`) force fresh auth validation on browser Back/Forward navigation.
-3. **Zero Native Alerts**: All blocking `window.confirm()` and `alert()` calls are eliminated in favor of branded in-app enterprise modals (`ConfirmModal.tsx`).
-4. **Reactive URL State Synchronization**: Modals and drawers synchronize seamlessly with React Router (`useSearchParams`). Closing a modal cleans the URL address bar immediately with zero full-page reload.
-5. **Concluded Auction Immutability & Bid Integrity Gate**: Concluded auctions (`ended`) are write-locked in perpetuity. The bid engine strictly validates that the parent auction is in active `live`/`extended` status and that `currentTime < current_end` before accepting any bid. Historical auctions can never be revived or accept late bids.
-
 ---
 
-## 3. Master Phased Execution Roadmap
+## 3. Migration Roadmap & Execution Status
 
 ```mermaid
-flowchart LR
-    P1["Phase 1: Architecture & React Foundation<br/>✅ COMPLETED"] --> P2["Phase 2: Customer & Admin Dashboards<br/>✅ COMPLETED"]
-    P2 --> P3["Phase 3: 5-Step Tender Creation Wizard<br/>✅ COMPLETED"]
-    P3 --> P4["Phase 4: Admin Deep Consoles<br/>✅ COMPLETED"]
-    P4 --> P5["Phase 5: Executive Spectator Console<br/>✅ COMPLETED (In Verification)"]
-    P5 --> P6["Phase 6: Vendor Live Bidding Room<br/>🔒 NEXT PHASE"]
+graph TD
+    P1["Phase 1: Architecture, Security & SPA Foundation<br/>✅ COMPLETED"]
+    P2["Phase 2: Corporate Buyer & Admin Operations Desk<br/>✅ COMPLETED"]
+    P3["Phase 3: 5-Step Tender Creation Wizard<br/>✅ COMPLETED"]
+    P4["Phase 4: Admin Deep Consoles<br/>✅ COMPLETED"]
+    P5["Phase 5: Executive Spectator Console<br/>✅ COMPLETED"]
+    P6["Phase 6: Multi-Tender Supplier Hub & Live Room<br/>✅ COMPLETED & VERIFIED"]
+    P7["Phase 7: Dual-Track Supplier Onboarding & KYC Approval<br/>✅ COMPLETED & VERIFIED"]
+    P8["Phase 8: Vendor Deletion, Railway Deployment & Team Roster<br/>✅ COMPLETED"]
+
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
+    P4 --> P5
+    P5 --> P6
+    P6 --> P7
+    P7 --> P8
 ```
 
 ---
@@ -98,104 +91,108 @@ flowchart LR
 
 ---
 
-### Phase 3: The 5-Step Guided Tender Creation Wizard (`/customer/request-tender`)
+### Phase 3: 5-Step Tender Creation Wizard
 **Status:** `COMPLETED & VERIFIED`
 
-Migrated the legacy wizard (`request-tender.html` / `request-tender.js`) into a modern, sequential React component ([`TenderCreationWizard.tsx`](file:///e:/Projects/BiddingSite/client/src/customer/pages/TenderCreationWizard.tsx)):
-
-```
-[ Step 1: Scope & Plant ] ➔ [ Step 2: Lot Economics ] ➔ [ Step 3: Supplier Pool ] ➔ [ Step 4: Terms & Delivery ] ➔ [ Step 5: Review & Submit ]
-```
-
-* [x] **Step 1: Event Scope & Plant Selection**:
-  - Pre-populate authenticated company profile (*Epack Petrochem Solutions*, GSTIN, Contact Person, Email, Phone).
-  - Tender Title, Procurement Category, Duration (15–240 mins), Target Date/Time.
-  - Delivery Plant picker pulling live facilities from SQLite with inline "+ Specify Custom Delivery Location" option.
-* [x] **Step 2: Lot Specifications & Economics**:
-  - Dynamic spreadsheet-style lot grid (Product Name, Category, Quantity, UOM, Reserve Ceiling, Decrement).
-  - Real-time combined budget ceiling counter ($\sum \text{Qty} \times \text{Reserve Price}$).
-  - Bulk CSV template download (`NexTrade_Tender_Lots_Template.csv`) & CSV file upload parser.
-* [x] **Step 3: Supplier Pool Allocation**:
-  - Pre-approved company vendor pool checklist with 1-click **"Select All"** toggle.
-  - External supplier invitation rows (Company Name, Contact Person, Phone, Email).
-* [x] **Step 4: Commercial Terms & Compliance**:
-  - Commercial terms dropdown (*30 Days Net*, *Immediate on Inspection*, *45 Days PDC*).
-  - Delivery timeline, logistics requirements, and quality certification checkboxes.
-* [x] **Step 5: Executive Review & Submission**:
-  - Read-only executive summary card summarizing all parameters, lot items, total reserve budget, and invited suppliers.
-  - Submit action calling `POST /api/customer/tender-requests`.
-  - Pop-up confirmation with generated tracking ID (e.g. `REQ-EPACK-2026-02`) and desk notification push.
-* [x] **Testing & Cleanup**: Vite compiled cleanly (128ms); retired legacy `private/customer/request-tender.html` and `public/js/customer/request-tender.js`.
+* [x] **End-to-End Guided Wizard ([`TenderCreationWizard.tsx`](file:///e:/Projects/BiddingSite/client/src/customer/pages/TenderCreationWizard.tsx))**:
+  - Step 1: Corporate Category & Sourcing Profile.
+  - Step 2: Multi-Lot Specifications Grid (dynamic add/remove, quantity, UOM, reserve price, bid decrement).
+  - Step 3: Scheduling & Anti-Sniping Controls.
+  - Step 4: Facility Delivery Terms & Compliance Checklist.
+  - Step 5: Supplier Selection & Custom Vendor Invitations.
+* [x] **Interactive Review & Instant Submit**: Generates real-time intake request (`REQ-EPACK-YYYY-XX`) routed to Admin Operations Desk.
 
 ---
 
-### Phase 4: Admin Enterprise Consoles (Client Management, Vendor KYC, & Builder)
+### Phase 4: Admin Deep Consoles
 **Status:** `COMPLETED & VERIFIED`
 
-Port remaining administrative tools into modular React views under the Admin layout:
-
-* [x] **Corporate Clients Manager (`/admin/clients`)**:
-  - Ported `private/admin/clients.html` and `public/js/admin/clients.js` to React ([`ClientsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/ClientsManager.tsx)).
-  - View corporate buyer organizations, search and filter by name/GSTIN/code via [`SearchBar.tsx`](file:///e:/Projects/BiddingSite/client/src/components/SearchBar.tsx), register new corporate clients, and manage exclusive corporate vendor pools with modal link/register/unlink controls.
-* [x] **Vendor KYC & Verification Console (`/admin/vendors`)**:
-  - Ported `private/admin/vendors.html` and `public/js/admin/vendors.js` to React ([`VendorsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/VendorsManager.tsx)).
-  - Master supplier table with GSTIN/PAN verification status, business phone, contact person, compliance status badges, and assigned corporate buyers.
-  - 1-click KYC Approve toggle calling `POST /api/admin/vendors/:id/approve` and modal to assign verified suppliers to corporate buyers.
-* [x] **Advanced Auction Builder & Editor Console (`/admin/auction-editor`)**:
-  - Ported `private/admin/auction-editor.html` and `public/js/admin/auction-editor.js` to React ([`AuctionBuilder.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/AuctionBuilder.tsx)).
-  - Supports both **Create Mode** (auto-sequential ID generator, client picker, default lots) and **Edit Mode** (`?id=...`, material update notification toggle, and live/ended lock protection).
-  - Multi-lot dynamic builder, delivery location, commercial instructions, anti-sniping rules, and vendor pool checklist modal.
-* [x] **Routing & Layout Integration**:
-  - Connected in [`AdminApp.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/AdminApp.tsx) with active tab styling and React Router navigation.
-  - Updated [`src/routes/public.routes.ts`](file:///e:/Projects/BiddingSite/src/routes/public.routes.ts) to serve `sendAdminBundle` on `/admin/clients`, `/admin/vendors`, and `/admin/auction-editor`.
-* [x] **Visited Link Color Neutralization**: Added explicit `.btn-white:visited` rules in `<style>` across HTML headers and components, ensuring pure white text regardless of browser history.
-* [x] **Cleanup**: Retired legacy `clients.html`, `vendors.html`, `auction-editor.html` and their corresponding `.js` files.
+* [x] **Enterprise Clients Management Console ([`ClientsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/ClientsManager.tsx))**:
+  - Live corporate client directory with GSTIN/PAN verification.
+  - Modal workflows to register new corporate buyers and manage facilities.
+* [x] **Master Vendors Management Console ([`VendorsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/VendorsManager.tsx))**:
+  - Vetted supplier catalog with approval status lifecycle (`approved`, `pending`, `blacklisted`).
+  - Add/Edit vendor modals with universal search.
+* [x] **Standalone Auction Builder Console ([`AuctionBuilder.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/AuctionBuilder.tsx))**:
+  - Direct auction creation bypassing intake requests.
+  - Auto-seeds lots, invites vendors, and publishes live/scheduled auctions.
 
 ---
 
-### Phase 5: Executive Read-Only Spectator / Observer Room
-**Status:** `COMPLETED (In Verification)`
+### Phase 5: Executive Read-Only Spectator / Observer Console
+**Status:** `COMPLETED & VERIFIED`
 
-Modernize `/observer/:id` (accessible by authenticated corporate buyers, desk supervisors, and guest invite tokens):
-
-* [x] **Port Spectator View to React ([`ObserverApp.tsx`](file:///e:/Projects/BiddingSite/client/src/observer/ObserverApp.tsx))**:
-  - Standalone SPA entry point: [`client/observer.html`](file:///e:/Projects/BiddingSite/client/observer.html) & [`client/src/observer/main.tsx`](file:///e:/Projects/BiddingSite/client/src/observer/main.tsx).
-  - Secure room access via customer session cookie, admin session cookie, or external spectator key (`?key=token_...`).
-  - Synchronized NTP countdown timer displaying active bidding window.
-  - Direct procurement savings counter vs baseline ceiling ($+\text{₹Savings}$ and $\% \text{Savings}$).
-  - **Financial Procurement Metric Integrity**: Strict enforcement that unbid lots are never counted towards "Committed Spend", accurately displaying unbid lots as **Unallocated Reserve Budget**.
-  - Dynamic live bid audit trail streaming chronological price drops over WebSockets with decrement drop callouts.
-  - Web Audio API Alert Engine ([`useObserverAudio.ts`](file:///e:/Projects/BiddingSite/client/src/observer/useObserverAudio.ts)) with mute toggle.
-  - Anti-sniping dynamic extension notification alert banner.
-  - Settlement banner when ended with direct link to download the 6-page official settlement audit report PDF.
-* [x] **Build & Route Pipeline**:
-  - Added `observer` input bundle to `vite.config.ts`.
-  - Updated Express `src/routes/public.routes.ts` to serve `sendObserverBundle` with anti-cache headers.
-* [ ] **Cleanup**: Retire legacy `public/customer-observer.html` and `public/js/customer-observer.js` upon verification.
+* [x] **Executive Spectator Room ([`ObserverApp.tsx`](file:///e:/Projects/BiddingSite/client/src/observer/ObserverApp.tsx))**:
+  - Live, low-latency WebSocket feed of incoming price drops.
+  - Procurement savings margin meter (Start Price vs Current L1 vs Total Savings).
+  - Chronological bidding audit trail with bidder attribution.
+  - Audio chimes using Web Audio API on bid events.
+  - Dual access: authenticated corporate buyers + tokenized observer links.
 
 ---
 
-### Phase 6: [FINAL PHASE] Vendor Live Reverse Bidding Room & High-Concurrency Engine
-**Status:** `PARKED UNTIL PHASES 1–5 ARE VERIFIED`
+### Phase 6: Multi-Tender Supplier Hub, Single-Bidder Seat Lock & Live Room
+**Status:** `COMPLETED & VERIFIED`
 
-*All vendor-facing mechanics are consolidated here and will be executed only after the Admin and Customer portals are 100% complete:*
+* [x] **2-Tier Supplier Authentication**:
+  - **Tier 1 (Instant Gateway)**: Opening any invited tender link auto-issues signed `nta_vendor_session` cookie (zero email burned).
+  - **Tier 2 (Direct Login)**: Dedicated supplier portal login (`/vendor/login` / [`VendorLogin.tsx`](file:///e:/Projects/BiddingSite/client/src/vendor/VendorLogin.tsx)) using Email + Permanent PIN/Password (no public GSTIN risk, zero OTP quota exhaustion).
+* [x] **Multi-Tender Supplier Hub ([`VendorDashboardApp.tsx`](file:///e:/Projects/BiddingSite/client/src/vendor/VendorDashboardApp.tsx))**:
+  - Unified view of all assigned tenders across corporate buyers.
+  - Categorized into Live (with manned/unmanned tags), Upcoming, and Concluded tenders.
+  - Universal real-time search across tender portfolio.
+* [x] **Single-Bidder Seat Concurrency Lock**:
+  - First company member to join claims the active bidding seat.
+  - Colleague terminals join in **Read-Only Mirror Mode** to prevent accidental conflicting bids.
+  - **60-Second Grace Timer**: Protects the primary seat from being hijacked during quick page refreshes or Wi-Fi drops.
+  - Voluntary seat relinquishment and claiming controls.
+* [x] **Smart Presence-Aware Routing (Unattended Tender Alert)**:
+  - If an outbid occurs in Auction A and an employee is inside Auction A, the alert stays strictly in Room A.
+  - If Auction A is **unmanned** by the company, an urgent broadcast is dispatched across the company's other active rooms and Supplier Hub: *"🚨 Unattended Tender Alert: You were outbid in Auction A and no active bidder is in the room!"*
+* [x] **Confidential Supplier Outcome Certificate ([`vendor-report-generator.ts`](file:///e:/Projects/BiddingSite/src/vendor-report-generator.ts))**:
+  - Tailored PDF certificate displaying only the vendor's own bids, final winning price, and legal participation seal.
+  - **Antitrust & Price-Blind**: Strictly redacts competitor identities, competitor price histories, and client reserve prices.
+* [x] **Live Reverse Bidding Terminal ([`VendorBiddingApp.tsx`](file:///e:/Projects/BiddingSite/client/src/vendor/VendorBiddingApp.tsx))**:
+  - Pre-Auction Waiting Room with synchronized countdown.
+  - Clamped stepper inputs, 1-Click `⚡ Quick Bid`, and self-outbid caution modals.
+  - Dynamic Anti-Sniping soft-close clock extensions.
+  - Direct navigation button to `🏢 Supplier Hub`.
 
-* [ ] **Tokenized Magic Link Authentication**:
-  - Secure, passwordless vendor access via tokenized URL: `/auction/:id?key=token_...`.
-  - Automatic session cookie establishment and validation against SQLite `auction_invites`.
-  - Waiting Room state for vendors arriving before the scheduled start time.
-* [ ] **High-Concurrency Real-Time Bidding Room**:
-  - WebSocket room subscription scoped strictly to the auction event.
-  - Concurrency safety: atomic bid validation (must be at or below current lowest bid minus min decrement).
-  - Real-time downward price drop broadcasts to all participants.
-* [ ] **Anti-Sniping Clock Extension Engine**:
-  - Automatic extension trigger (e.g. extending duration by 3 minutes if a bid arrives within the final 2 minutes of the clock).
-* [ ] **Supplier Bidding UI & Rank Feedback**:
-  - Real-time rank indicators: **L1 (Lowest / Leading)** vs **Outbid / Behind**.
-  - One-click decrement bid button and custom bid input with ceiling clamps.
-* [ ] **Post-Auction Conclusion & Settlement**:
-  - Event settlement computation: winning supplier selection per lot, total savings generated.
-  - Automatic generation of the 6-page official settlement PDF report matching the `PTA-EPACKPetro-07` industry benchmark.
+---
+
+### Phase 7: Dual-Track Supplier Onboarding & KYC Approval Architecture
+**Status:** `COMPLETED & VERIFIED`
+
+* [x] **Dual-Track Workflow Engine**:
+  - **Track A (Email-Only / Partial Invitation)**: Generates `/vendor/onboard?token=...` allowing supplier to fill legal business name, contact person, mobile, 15-char GSTIN, 10-char PAN, address, and create 6-digit PIN. Submission sets status to `pending_approval`.
+  - **Track B (Pre-Filled Express Activation)**: For vendors whose master data was pre-filled by Admin/Buyer. Generates `/vendor/setup-pin?token=...` displaying read-only company details and asking only for 6-digit PIN setup. Immediate activation and auto-login to Supplier Hub.
+* [x] **Enterprise Gateway Routing & Firewall**:
+  - Whitelisted `/vendor/onboard`, `/vendor/register`, `/vendor/setup-pin` through `requireVendorAuth` and Express router.
+  - Mounted `<VendorOnboarding />` in [`client/src/vendor/main.tsx`](file:///e:/Projects/BiddingSite/client/src/vendor/main.tsx).
+* [x] **Zero Dummy Data Guarantee**:
+  - Removed all hardcoded mock accounts (`goldglobalfuels@gmail.com | PIN: 123456`) and fake names.
+  - Enforced real database validation: unregistered and pending suppliers are blocked at `/api/vendor/login` with clear compliance messages.
+* [x] **Admin KYC & Vendor Management Integration ([`VendorsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/VendorsManager.tsx))**:
+  - Added `+ Invite / Onboard Supplier` modal with instant link generator and 1-click clipboard copy.
+  - Added per-row `🔗 Link` copy button to retrieve active onboarding/setup links anytime.
+  - Seamless 1-click `✓ Approve KYC` button for pending applications.
+
+---
+
+### Phase 8: Vendor Deletion Engine, Railway Deployment & Team Roster
+**Status:** `COMPLETED & VERIFIED`
+
+* [x] **Audit-Safe Vendor Deletion & Force Wipe**:
+  - Zero-bid vendors deleted cleanly with 1-click confirmation.
+  - Vendors with historical bids protected by audit compliance warning: supports both safe deactivation (`status = 'blacklisted'`) and force-wipe of test data.
+* [x] **Automated Transactional Email Engine ([`src/email-service.ts`](file:///e:/Projects/BiddingSite/src/email-service.ts))**:
+  - Integrated Resend REST API for production emails (Supplier Invitations, PIN Setup, KYC Approvals, Tender Reminders).
+  - Built-in offline development logger for seamless local testing.
+* [x] **Production Railway Configuration**:
+  - Added [`Dockerfile`](file:///e:/Projects/BiddingSite/Dockerfile), [`railway.json`](file:///e:/Projects/BiddingSite/railway.json), and [`.dockerignore`](file:///e:/Projects/BiddingSite/.dockerignore) for 1-click containerized cloud deployment with persistent volume support for SQLite.
+* [x] **Multi-Employee Team Rosters**:
+  - Support for multi-user Corporate Buyer organizations (`platform_users.organization_id`) with role-based job titles.
+  - Support for Supplier Company sub-teams (`vendor_team_members`), integrated with the live room Single-Bidder Seat Lock.
 
 ---
 
@@ -205,4 +202,3 @@ Modernize `/observer/:id` (accessible by authenticated corporate buyers, desk su
 2. **Zero Native Alerts**: Never introduce `window.alert()` or `window.confirm()`. Always use branded in-app modals.
 3. **Verification Before Deletion**: Never delete a legacy file until its React replacement is fully built, compiled via Vite, and tested on the running server.
 4. **Git Hygiene**: Always run `git status` and maintain committed milestones before opening a new phase.
-

@@ -5,9 +5,10 @@ import { generateMagicToken, buildAccessUrl } from '../magic-link.js';
 import { processAuctionVendors } from './admin-auctions.routes.js';
 import { computeEventOutcome, type LotSettlementInput } from '../auction-outcome.js';
 import { generateAuctionReportPdf } from '../report-generator.js';
-import { requireCustomerAuth, requireAdminAuth } from '../auth.js';
+import { requireCustomerAuth, requireAdminAuth, hashPassword } from '../auth.js';
 import { Server as SocketIOServer } from 'socket.io';
 import { createNotification } from '../notifications.js';
+import { sendSupplierOnboardingInviteEmail } from '../email-service.js';
 
 function safeJsonParse<T>(val: any, fallback: T): T {
   if (!val) return fallback;
@@ -97,6 +98,88 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 0.2 Retrieve Organization Team Members
+  router.get('/customer/team', (req, res) => {
+    try {
+      const orgId = (req as any).customerOrgId || 'org_epack';
+      const team = db
+        .prepare(`
+          SELECT id, email, full_name, role, job_title, phone, status, created_at 
+          FROM platform_users 
+          WHERE organization_id = ?
+          ORDER BY created_at ASC
+        `)
+        .all(orgId);
+      res.json({ team });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // 0.3 Add Organization Team Member
+  router.post('/customer/team', (req, res) => {
+    try {
+      const orgId = (req as any).customerOrgId || 'org_epack';
+      const { email, full_name, job_title, phone } = req.body;
+      if (!email || !full_name) {
+        return res.status(400).json({ error: 'Email and full name are required.' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      const existing = db.prepare('SELECT id FROM platform_users WHERE LOWER(email) = ?').get(cleanEmail);
+      if (existing) {
+        return res.status(400).json({ error: 'A user with this email already exists in the system.' });
+      }
+
+      const uId = `usr_team_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const defaultPasswordHash = hashPassword('Epack_Team_2026!');
+
+      db.prepare(`
+        INSERT INTO platform_users (id, email, password_hash, role, organization_id, full_name, job_title, phone, status)
+        VALUES (?, ?, ?, 'customer', ?, ?, ?, ?, 'active')
+      `).run(
+        uId,
+        cleanEmail,
+        defaultPasswordHash,
+        orgId,
+        full_name.trim(),
+        (job_title || 'Procurement Officer').trim(),
+        (phone || '').trim()
+      );
+
+      res.json({
+        success: true,
+        member: {
+          id: uId,
+          email: cleanEmail,
+          full_name: full_name.trim(),
+          job_title: job_title || 'Procurement Officer',
+        },
+        message: 'Team member added successfully.',
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 0.4 Delete Organization Team Member
+  router.delete('/customer/team/:id', (req, res) => {
+    try {
+      const orgId = (req as any).customerOrgId || 'org_epack';
+      const user = db
+        .prepare('SELECT id, organization_id FROM platform_users WHERE id = ? AND organization_id = ?')
+        .get(req.params.id, orgId) as any;
+      if (!user) return res.status(404).json({ error: 'Team member not found.' });
+
+      db.prepare('DELETE FROM user_sessions WHERE user_id = ?').run(user.id);
+      db.prepare('DELETE FROM platform_users WHERE id = ?').run(user.id);
+
+      res.json({ success: true, message: 'Team member removed from organization.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
     }
   });
 
@@ -215,12 +298,12 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
         ORDER BY facility_name ASC
       `).all(org.id) as any[];
 
-      // 4. Approved Vendor Pool
+      // 4. Authorized Corporate Vendor Pool (Approved, Pending Review & Invited)
       const vendorPool = db.prepare(`
-        SELECT v.id, v.company_name, v.contact_person, v.email, v.phone, v.status, v.gstin, v.pan 
+        SELECT v.id, v.company_name, v.contact_person, v.email, v.phone, v.status, v.gstin, v.pan, v.onboarding_type, v.onboarding_token
         FROM vendors v 
         JOIN company_vendors cv ON v.id = cv.vendor_id 
-        WHERE cv.company_id = ? AND v.status = 'approved'
+        WHERE cv.company_id = ? AND v.status != 'blacklisted'
         ORDER BY v.company_name ASC
       `).all(org.id) as any[];
 
@@ -491,7 +574,7 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
     }
   });
 
-  // Add a vendor to company's vetted supplier pool
+  // Add a vendor to company's vetted supplier pool (Dual-Track Enterprise Onboarding)
   router.post('/customer/vendors', (req, res) => {
     try {
       const org_id = (req as any).customerOrgId || req.body.org_id;
@@ -500,22 +583,102 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
         return res.status(400).json({ error: 'Company name and email are required.' });
       }
 
-      let vendor = db.prepare('SELECT id FROM vendors WHERE email = ?').get(email) as any;
-      let vendorId = vendor?.id;
-      if (!vendorId) {
-        vendorId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanCompany = company_name.trim();
+      const cleanContact = contact_person?.trim() || 'Representative';
+      const cleanPhone = phone?.trim() || 'N/A';
+      const rawGstin = gstin?.trim().toUpperCase() || null;
+      const rawPan = pan?.trim().toUpperCase() || null;
+
+      // Dual-track evaluation: Only mark 'approved' / 'pin_only' if GSTIN and PAN are provided.
+      // If missing, mark 'unregistered' / 'full' so the supplier must complete legal registration and pass Admin review.
+      const hasFullLegal = Boolean(rawGstin && rawPan && cleanContact && cleanContact !== 'Representative');
+      const onboardingType: 'full' | 'pin_only' = hasFullLegal ? 'pin_only' : 'full';
+      const initialStatus = hasFullLegal ? 'approved' : 'unregistered';
+      const token = 'vtok_' + generateMagicToken();
+      const tokenExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
+      let vendor = db.prepare('SELECT * FROM vendors WHERE LOWER(email) = LOWER(?)').get(cleanEmail) as any;
+
+      if (!vendor) {
+        const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
         db.prepare(`
-          INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, status)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')
-        `).run(vendorId, company_name, contact_person || 'Representative', email, phone || 'N/A', gstin || null, pan || null);
+          INSERT INTO vendors (
+            id, company_name, contact_person, email, phone, gstin, pan, 
+            onboarding_token, onboarding_type, onboarding_token_expires_at, status
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          vId,
+          cleanCompany,
+          cleanContact,
+          cleanEmail,
+          cleanPhone,
+          rawGstin,
+          rawPan,
+          token,
+          onboardingType,
+          tokenExpiry,
+          initialStatus
+        );
+        vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vId) as any;
+      } else {
+        // Update vendor details if corporate buyer provided new or more complete information
+        db.prepare(`
+          UPDATE vendors 
+          SET company_name = COALESCE(?, company_name),
+              contact_person = CASE WHEN (contact_person = 'Representative' OR contact_person IS NULL) AND ? IS NOT NULL THEN ? ELSE contact_person END,
+              phone = CASE WHEN (phone = 'N/A' OR phone IS NULL) AND ? IS NOT NULL THEN ? ELSE phone END,
+              gstin = COALESCE(?, gstin),
+              pan = COALESCE(?, pan),
+              onboarding_token = COALESCE(onboarding_token, ?),
+              onboarding_type = COALESCE(onboarding_type, ?),
+              onboarding_token_expires_at = COALESCE(onboarding_token_expires_at, ?)
+          WHERE id = ?
+        `).run(
+          cleanCompany,
+          cleanContact !== 'Representative' ? cleanContact : null,
+          cleanContact !== 'Representative' ? cleanContact : null,
+          cleanPhone !== 'N/A' ? cleanPhone : null,
+          cleanPhone !== 'N/A' ? cleanPhone : null,
+          rawGstin,
+          rawPan,
+          token,
+          onboardingType,
+          tokenExpiry,
+          vendor.id
+        );
+        vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vendor.id) as any;
       }
 
+      // Link supplier to corporate buyer's organization pool
       db.prepare(`
         INSERT OR IGNORE INTO company_vendors (company_id, vendor_id)
         VALUES (?, ?)
-      `).run(org_id, vendorId);
+      `).run(org_id, vendor.id);
 
-      res.json({ success: true, vendorId, message: 'Vendor added to corporate pool.' });
+      // Prepare secure onboarding invitation link
+      const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const inviteToken = vendor.onboarding_token || token;
+      const effectiveType: 'full' | 'pin_only' = vendor.onboarding_type || onboardingType;
+      const inviteUrl =
+        effectiveType === 'pin_only'
+          ? `${baseUrl}/vendor/setup-pin?token=${inviteToken}`
+          : `${baseUrl}/vendor/onboard?token=${inviteToken}`;
+
+      // Dispatch automated transactional invitation email
+      sendSupplierOnboardingInviteEmail(cleanEmail, vendor.company_name, inviteUrl, effectiveType).catch(() => {});
+
+      res.json({
+        success: true,
+        vendorId: vendor.id,
+        status: vendor.status,
+        onboardingType: effectiveType,
+        inviteUrl,
+        message: hasFullLegal
+          ? `Supplier "${vendor.company_name}" authorized. PIN setup invitation dispatched to ${cleanEmail}.`
+          : `Supplier "${vendor.company_name}" added as Unregistered. KYC registration invitation dispatched to ${cleanEmail}.`,
+      });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

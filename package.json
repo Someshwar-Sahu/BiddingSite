@@ -13,6 +13,8 @@
     "build:client": "vite build",
     "build:all": "tsc && vite build",
     "seed:live": "tsx scripts/seed-live-auction.ts",
+    "seed:waiting": "tsx scripts/seed-waiting-room.ts",
+    "seed:sniping": "tsx scripts/seed-sniping.ts",
     "seed:clean": "tsx scripts/clean-test-auctions.ts",
     "start": "node dist/index.js",
     "test": "vitest run",

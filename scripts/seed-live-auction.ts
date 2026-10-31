@@ -1,12 +1,13 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import { hashPassword } from '../src/auth.js';
 
 const dbPath = process.env.DATABASE_PATH || path.resolve('./auction.db');
 const db = new Database(dbPath);
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
-console.log('🚀 Seeding Active LIVE Reverse Auction for Phase 5 Testing...');
+console.log('🚀 Seeding Active LIVE Reverse Auction for Testing...');
 
 const auctionId = 'LIVE-EPACK-2026';
 const now = new Date();
@@ -25,13 +26,24 @@ const transaction = db.transaction(() => {
     VALUES ('org_epack', 'Epack Petrochem Solutions Pvt Ltd', '03AAPCP3056IZE', 'procurement@epack.in', '9876543210')
   `).run();
 
-  // 3. Ensure test vendors exist
+  // 3. Ensure test vendors exist with default PIN (123456)
+  const vendorPinHash = hashPassword('123456');
   db.prepare(`
-    INSERT OR IGNORE INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, status)
+    INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, password_hash, status)
     VALUES 
-      ('vnd_gold', 'Gold Global Fuels', 'Harsh Vardhan', 'goldglobalfuels@gmail.com', '9876543211', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved'),
-      ('vnd_bridge', 'RS Bridge Consultancy', 'Rahul Sharma', 'rsbridgeconsultancy@gmail.com', '9876543212', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved')
-  `).run();
+      ('vnd_gold', 'Gold Global Fuels', 'Harsh Vardhan', 'goldglobalfuels@gmail.com', '9876543211', '27AAPFU0939F1ZV', 'AAPFU0939F', ?, 'approved'),
+      ('vnd_bridge', 'RS Bridge Consultancy', 'Rahul Sharma', 'rsbridgeconsultancy@gmail.com', '9876543212', '27AAPFU0939F1ZV', 'AAPFU0939F', ?, 'approved')
+    ON CONFLICT(id) DO UPDATE SET password_hash = excluded.password_hash
+  `).run(vendorPinHash, vendorPinHash);
+
+  // Sync to platform_users (organization_id is NULL)
+  db.prepare(`
+    INSERT INTO platform_users (id, email, password_hash, role, organization_id, full_name)
+    VALUES 
+      ('usr_vnd_gold', 'goldglobalfuels@gmail.com', ?, 'vendor', NULL, 'Gold Global Fuels'),
+      ('usr_vnd_bridge', 'rsbridgeconsultancy@gmail.com', ?, 'vendor', NULL, 'RS Bridge Consultancy')
+    ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash
+  `).run(vendorPinHash, vendorPinHash);
 
   // 4. Insert LIVE Reverse Auction
   db.prepare(`
@@ -124,7 +136,6 @@ transaction();
 console.log('✅ Live Reverse Auction successfully seeded!');
 console.log(`📌 Auction ID: ${auctionId}`);
 console.log(`🔴 Status: LIVE BIDDING (Expires in ~35 minutes)`);
-console.log(`🔗 Observer Room URL (Direct): http://localhost:3000/observer/${auctionId}`);
-console.log(`🔑 Observer Room URL (Tokenized): http://localhost:3000/observer/${auctionId}?key=token_spectator_live_test`);
-console.log(`\nTo clean up or reset when done, run:\n  npx tsx scripts/clean-test-auctions.ts`);
-
+console.log(`🔗 Vendor A URL: http://localhost:3000/live-auction/${auctionId}?key=token_gold_live_test`);
+console.log(`🔗 Vendor B URL: http://localhost:3000/live-auction/${auctionId}?key=token_bridge_live_test`);
+console.log(`🔑 Supplier Login: http://localhost:3000/vendor/login (PIN: 123456)`);

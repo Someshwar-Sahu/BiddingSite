@@ -42,16 +42,18 @@ export function getAuctionTimerState(
   currentTime: Date = new Date()
 ): TimerState {
   const hardStopEndTime = calculateHardStopEndTime(config);
-  const remainingMs = currentEndTime.getTime() - currentTime.getTime();
-  const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+  let remainingMs = currentEndTime.getTime() - currentTime.getTime();
 
   let status: AuctionStatus = 'live';
   if (currentTime < config.scheduledStartTime) {
     status = 'scheduled';
+    remainingMs = config.scheduledStartTime.getTime() - currentTime.getTime();
   } else if (remainingMs <= 0) {
     status = 'ended';
+    remainingMs = 0;
   }
 
+  const remainingSeconds = Math.max(0, Math.floor(remainingMs / 1000));
   const totalExtendedMs = currentEndTime.getTime() - config.scheduledEndTime.getTime();
   const totalExtendedMinutes = Math.max(0, Math.round(totalExtendedMs / (60 * 1000)));
   const isHardStopReached = currentEndTime.getTime() >= hardStopEndTime.getTime();

@@ -132,13 +132,146 @@ export function createAuthRouter(db: Database.Database): Router {
   // Check Current Customer Session
   router.get('/customer/me', (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
-    const session = validateSession(db, cookies['nta_customer_session']);
+    const session = validateSession(db, cookies['nta_customer_session'], 'customer');
     if (!session || session.role !== 'customer') {
       return res.status(401).json({ authenticated: false });
     }
     res.json({ authenticated: true, user: session });
   });
 
+  // ==========================================
+  // REALM 3: SUPPLIER / VENDOR AUTHENTICATION
+  // ==========================================
+
+  // Vendor Direct Login (Email + Permanent PIN/Password)
+  router.post('/vendor/login', (req, res) => {
+    try {
+      const { email, pin, password } = req.body;
+      const cred = pin || password;
+
+      if (!email || !cred) {
+        return res.status(400).json({ error: 'Please enter your registered supplier email and permanent PIN/Password.' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+
+      // 1. Locate vendor record in master vendors table by email
+      const vendor = db
+        .prepare('SELECT * FROM vendors WHERE LOWER(email) = ?')
+        .get(cleanEmail) as any;
+
+      if (!vendor) {
+        return res.status(401).json({ error: 'Unrecognized supplier email. Please contact the procurement desk.' });
+      }
+
+      // 2. Validate supplier status & KYC compliance
+      if (vendor.status === 'unregistered') {
+        return res.status(403).json({
+          error: 'Supplier onboarding incomplete. Please use the onboarding invitation link sent to your email to complete registration.',
+        });
+      }
+
+      if (vendor.status === 'pending_approval') {
+        return res.status(403).json({
+          error: 'Your supplier KYC is currently pending verification by NexTrade Operations Desk. You will be able to log in once approved.',
+        });
+      }
+
+      if (vendor.status === 'blacklisted') {
+        return res.status(403).json({
+          error: 'Supplier account suspended. Please contact the compliance desk for assistance.',
+        });
+      }
+
+      if (!vendor.password_hash) {
+        return res.status(403).json({
+          error: 'Access PIN not yet configured. Please use your activation link to set your permanent PIN.',
+        });
+      }
+
+      // 3. Verify PIN/Password
+      if (!verifyPassword(String(cred), vendor.password_hash)) {
+        return res.status(401).json({ error: 'Invalid supplier PIN / Access Password.' });
+      }
+
+      const expectedHash = vendor.password_hash;
+
+      // 4. Ensure platform_user exists for session joining (organization_id is NULL)
+      const uId = `usr_${vendor.id}`;
+      try {
+        db.prepare(`
+          INSERT INTO platform_users (id, email, password_hash, role, organization_id, full_name)
+          VALUES (?, ?, ?, 'vendor', NULL, ?)
+          ON CONFLICT(email) DO UPDATE SET password_hash = excluded.password_hash
+        `).run(uId, cleanEmail, expectedHash, vendor.company_name);
+      } catch (upsertErr) {
+        // Fallback for older sqlite
+        db.prepare("UPDATE platform_users SET password_hash = ? WHERE LOWER(email) = ?").run(expectedHash, cleanEmail);
+      }
+
+      // 5. Create persistent 30-day supplier session (storing vendor.id as organizationId)
+      const sessionId = createSession(db, uId, 'vendor', vendor.id, 30);
+
+      res.setHeader(
+        'Set-Cookie',
+        `nta_vendor_session=${sessionId}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${30 * 24 * 3600}`
+      );
+
+      res.json({
+        success: true,
+        message: 'Supplier authentication successful.',
+        sessionId,
+        vendor: {
+          id: vendor.id,
+          companyName: vendor.company_name,
+          email: vendor.email,
+        },
+        redirect: '/vendor/dashboard',
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Vendor Logout
+  router.post('/vendor/logout', (req, res) => {
+    try {
+      const cookies = parseCookies(req.headers.cookie);
+      const sessionId = cookies['nta_vendor_session'];
+      if (sessionId) {
+        db.prepare('DELETE FROM user_sessions WHERE session_id = ?').run(sessionId);
+      }
+      res.setHeader('Set-Cookie', 'nta_vendor_session=; Path=/; HttpOnly; Max-Age=0');
+      res.json({ success: true, redirect: '/vendor/login' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Check Current Vendor Session
+  router.get('/vendor/me', (req, res) => {
+    const cookies = parseCookies(req.headers.cookie);
+    const session = validateSession(db, cookies['nta_vendor_session'], 'vendor');
+    if (!session || session.role !== 'vendor') {
+      return res.status(401).json({ authenticated: false });
+    }
+
+    const vendorId = session.organizationId || session.userId;
+    const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vendorId) as any;
+
+    res.json({
+      authenticated: true,
+      vendor: {
+        id: vendorId,
+        companyName: vendor?.company_name || session.fullName,
+        email: session.email,
+        contactPerson: vendor?.contact_person || 'Representative',
+        phone: vendor?.phone,
+        gstin: vendor?.gstin,
+        pan: vendor?.pan,
+      },
+    });
+  });
+
   return router;
 }
-

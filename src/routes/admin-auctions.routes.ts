@@ -7,6 +7,11 @@ import { computeEventOutcome, type LotSettlementInput } from '../auction-outcome
 import { generateAuctionReportPdf } from '../report-generator.js';
 import { Server as SocketIOServer } from 'socket.io';
 import { createNotification } from '../notifications.js';
+import {
+  sendSupplierOnboardingInviteEmail,
+  sendKycApprovalEmail,
+  sendAuctionInvitationEmail,
+} from '../email-service.js';
 
 /**
  * Robust helper to process assigned and custom vendors during auction creation and updates.
@@ -74,11 +79,17 @@ export function processAuctionVendors(
 
     if (!vendor) {
       const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+      const hasFullLegal = Boolean(rawGstin && rawPan && rawContact && rawContact !== 'Representative');
+      const onboardingType = hasFullLegal ? 'pin_only' : 'full';
+      const initialStatus = hasFullLegal ? 'approved' : 'unregistered';
+      const vToken = 'vtok_' + generateMagicToken();
+      const vExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+
       db.prepare(`
-        INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, status)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 'approved')
-      `).run(vId, companyName, contactPerson, email, phone, rawGstin || null, rawPan || null);
-      vendor = { id: vId, company_name: companyName, email, phone };
+        INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, onboarding_token, onboarding_type, onboarding_token_expires_at, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(vId, companyName, contactPerson, email, phone, rawGstin || null, rawPan || null, vToken, onboardingType, vExpiry, initialStatus);
+      vendor = { id: vId, company_name: companyName, email, phone, status: initialStatus };
     } else {
       // Update vendor details if incoming data is more complete
       const updates: string[] = [];
@@ -419,8 +430,12 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
       let waUrl = null;
       if (vendor_id) {
         const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vendor_id) as any;
+        const auction = db.prepare('SELECT title, scheduled_start FROM auctions WHERE id = ?').get(auctionId) as any;
         if (vendor && vendor.phone) {
           waUrl = buildWhatsAppShareUrl(vendor.phone, vendor.company_name, auctionId, accessUrl);
+        }
+        if (vendor && vendor.email && auction) {
+          sendAuctionInvitationEmail(vendor.email, vendor.company_name, auctionId, auction.title, auction.scheduled_start, accessUrl).catch(() => {});
         }
       }
 
@@ -433,8 +448,233 @@ export function createAdminAuctionsRouter(db: Database.Database, repo: AuctionRe
   // 7. Approve Vendor KYC
   router.post('/vendors/:id/approve', (req, res) => {
     try {
+      const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(req.params.id) as any;
+      if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+
+      // Enforce strict enterprise KYC requirement: GSTIN and PAN must be present
+      if (!vendor.gstin || !vendor.pan || !vendor.gstin.trim() || !vendor.pan.trim()) {
+        return res.status(400).json({
+          error: `Cannot approve "${vendor.company_name}": Legal KYC details (GSTIN & PAN) have not been submitted yet. The supplier must first complete their registration form.`,
+        });
+      }
+
       db.prepare("UPDATE vendors SET status = 'approved' WHERE id = ?").run(req.params.id);
-      res.json({ success: true });
+      if (vendor.email) {
+        const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+        sendKycApprovalEmail(vendor.email, vendor.company_name, `${baseUrl}/vendor/login`).catch(() => {});
+      }
+      res.json({ success: true, message: `Supplier "${vendor.company_name}" KYC approved successfully.` });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 7a. Revoke Vendor Approval back to unregistered
+  router.post('/vendors/:id/revoke', (req, res) => {
+    try {
+      db.prepare("UPDATE vendors SET status = 'unregistered' WHERE id = ?").run(req.params.id);
+      res.json({ success: true, message: 'Supplier approval revoked. Status set to unregistered.' });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 7a. Invite New Supplier (Track A: Email-Only or Track B: Pre-filled PIN Setup)
+  router.post('/vendors/invite', (req, res) => {
+    try {
+      const { email, company_name, contact_person, phone, gstin, pan, address, company_id } = req.body;
+      if (!email || !email.trim()) {
+        return res.status(400).json({ error: 'Supplier email address is required.' });
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      let vendor = db.prepare('SELECT * FROM vendors WHERE LOWER(email) = ?').get(cleanEmail) as any;
+
+      const token = 'vtok_' + generateMagicToken();
+      const tokenExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      const hasAllDetails = Boolean(gstin?.trim() && pan?.trim() && contact_person?.trim());
+      const onboardingType = hasAllDetails ? 'pin_only' : 'full';
+      const initialStatus = hasAllDetails ? 'approved' : 'unregistered';
+
+      if (!vendor) {
+        const vId = `vnd_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+        db.prepare(`
+          INSERT INTO vendors (id, company_name, contact_person, email, phone, gstin, pan, address, onboarding_token, onboarding_type, onboarding_token_expires_at, status)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          vId,
+          (company_name || cleanEmail.split('@')[0]).trim(),
+          (contact_person || 'Representative').trim(),
+          cleanEmail,
+          (phone || 'N/A').trim(),
+          gstin ? gstin.trim().toUpperCase() : null,
+          pan ? pan.trim().toUpperCase() : null,
+          address ? address.trim() : null,
+          token,
+          onboardingType,
+          tokenExpiry,
+          initialStatus
+        );
+        vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vId) as any;
+      } else {
+        // Refresh token for existing vendor
+        db.prepare(`
+          UPDATE vendors 
+          SET onboarding_token = ?, onboarding_type = ?, onboarding_token_expires_at = ?,
+              company_name = COALESCE(?, company_name),
+              contact_person = CASE WHEN contact_person = 'Representative' AND ? IS NOT NULL THEN ? ELSE contact_person END,
+              gstin = COALESCE(?, gstin),
+              pan = COALESCE(?, pan)
+          WHERE id = ?
+        `).run(
+          token,
+          onboardingType,
+          tokenExpiry,
+          company_name ? company_name.trim() : null,
+          contact_person ? contact_person.trim() : null,
+          contact_person ? contact_person.trim() : null,
+          gstin ? gstin.trim().toUpperCase() : null,
+          pan ? pan.trim().toUpperCase() : null,
+          vendor.id
+        );
+        vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vendor.id) as any;
+      }
+
+      if (company_id) {
+        db.prepare('INSERT OR IGNORE INTO company_vendors (company_id, vendor_id) VALUES (?, ?)').run(company_id, vendor.id);
+      }
+
+      const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const inviteUrl =
+        onboardingType === 'pin_only'
+          ? `${baseUrl}/vendor/setup-pin?token=${token}`
+          : `${baseUrl}/vendor/onboard?token=${token}`;
+
+      // Dispatch automated transactional invitation email
+      sendSupplierOnboardingInviteEmail(cleanEmail, vendor.company_name, inviteUrl, onboardingType).catch(() => {});
+
+      res.json({
+        success: true,
+        vendor,
+        token,
+        onboardingType,
+        inviteUrl,
+        message:
+          onboardingType === 'pin_only'
+            ? 'Supplier pre-registered! Link generated for PIN setup only.'
+            : 'Supplier invited! Registration link generated for full KYC completion.',
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 7b. Retrieve active Invite / Setup Link for any vendor
+  router.get('/vendors/:id/invite-link', (req, res) => {
+    try {
+      const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(req.params.id) as any;
+      if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+
+      let token = vendor.onboarding_token;
+      const tokenExpiry = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+      if (!token) {
+        token = 'vtok_' + generateMagicToken();
+        db.prepare('UPDATE vendors SET onboarding_token = ?, onboarding_token_expires_at = ? WHERE id = ?').run(
+          token,
+          tokenExpiry,
+          vendor.id
+        );
+      }
+
+      const hasAllDetails = Boolean(
+        vendor.gstin && vendor.pan && vendor.contact_person && vendor.contact_person !== 'Representative'
+      );
+      const onboardingType = vendor.onboarding_type || (hasAllDetails ? 'pin_only' : 'full');
+      const baseUrl = process.env.APP_BASE_URL || `http://localhost:${process.env.PORT || 3000}`;
+      const inviteUrl =
+        onboardingType === 'pin_only'
+          ? `${baseUrl}/vendor/setup-pin?token=${token}`
+          : `${baseUrl}/vendor/onboard?token=${token}`;
+
+      res.json({
+        success: true,
+        token,
+        onboardingType,
+        inviteUrl,
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // 7c. Delete or Deactivate Vendor
+  router.delete('/vendors/:id', (req, res) => {
+    try {
+      const vendorId = req.params.id;
+      const vendor = db.prepare('SELECT * FROM vendors WHERE id = ?').get(vendorId) as any;
+      if (!vendor) return res.status(404).json({ error: 'Vendor not found' });
+
+      const bidRow = db.prepare('SELECT count(*) as count FROM bids WHERE vendor_id = ?').get(vendorId) as any;
+      const bidCount = bidRow?.count || 0;
+
+      const isForce = req.query.force === 'true';
+      const action = req.query.action as string;
+
+      // Handle Safe Deactivation / Blacklisting
+      if (action === 'deactivate') {
+        db.prepare("UPDATE vendors SET status = 'blacklisted' WHERE id = ?").run(vendorId);
+        db.prepare("UPDATE auction_invites SET is_revoked = 1 WHERE vendor_id = ? AND expires_at > datetime('now')").run(
+          vendorId
+        );
+        db.prepare("DELETE FROM user_sessions WHERE user_id = ? OR organization_id = ?").run(`usr_${vendorId}`, vendorId);
+        return res.json({
+          success: true,
+          action: 'deactivated',
+          message: `Supplier "${vendor.company_name}" has been deactivated and blacklisted from active auctions.`,
+        });
+      }
+
+      // If supplier has placed bids and force is not specified, return 409 Conflict
+      if (bidCount > 0 && !isForce) {
+        const aucRow = db
+          .prepare(
+            'SELECT count(DISTINCT l.auction_id) as count FROM bids b JOIN lots l ON b.lot_id = l.id WHERE b.vendor_id = ?'
+          )
+          .get(vendorId) as any;
+        const auctionCount = aucRow?.count || 0;
+        return res.status(409).json({
+          conflict: true,
+          hasBids: true,
+          bidCount,
+          auctionCount,
+          companyName: vendor.company_name,
+          error: `Supplier "${vendor.company_name}" has placed ${bidCount} bids in ${auctionCount} past tenders. Deleting them directly will alter historical audit records. You can Deactivate them safely, or Force Delete to permanently wipe all test data.`,
+        });
+      }
+
+      // Hard Delete Transaction
+      const deleteTx = db.transaction(() => {
+        if (isForce) {
+          db.prepare('DELETE FROM bids WHERE vendor_id = ?').run(vendorId);
+          db.prepare('UPDATE lots SET current_l1_vendor_id = NULL WHERE current_l1_vendor_id = ?').run(vendorId);
+        }
+        db.prepare('DELETE FROM auction_invites WHERE vendor_id = ?').run(vendorId);
+        db.prepare('DELETE FROM company_vendors WHERE vendor_id = ?').run(vendorId);
+        db.prepare("DELETE FROM user_sessions WHERE user_id = ? OR organization_id = ?").run(`usr_${vendorId}`, vendorId);
+        db.prepare("DELETE FROM platform_users WHERE id = ? OR LOWER(email) = ?").run(
+          `usr_${vendorId}`,
+          vendor.email.toLowerCase().trim()
+        );
+        db.prepare('DELETE FROM vendors WHERE id = ?').run(vendorId);
+      });
+
+      deleteTx();
+
+      res.json({
+        success: true,
+        deleted: true,
+        message: `Supplier "${vendor.company_name}" has been permanently deleted.`,
+      });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
     }

@@ -36,6 +36,11 @@ export function initializeDatabase(dbPath: string = ':memory:'): Database.Databa
       phone TEXT NOT NULL DEFAULT 'N/A',
       gstin TEXT,
       pan TEXT,
+      address TEXT,
+      password_hash TEXT,
+      onboarding_token TEXT,
+      onboarding_type TEXT DEFAULT 'full',
+      onboarding_token_expires_at DATETIME,
       status TEXT CHECK(status IN ('unregistered', 'pending_approval', 'approved', 'blacklisted')) DEFAULT 'approved',
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -213,7 +218,7 @@ export function initializeDatabase(dbPath: string = ':memory:'): Database.Databa
       db.exec('ALTER TABLE tender_requests ADD COLUMN rejection_reason TEXT;');
     }
 
-    // 2. Migrate auctions (Fixes: SqliteError: no such column: a.delivery_location)
+    // 2. Migrate auctions
     const aucInfo = db.prepare("PRAGMA table_info('auctions')").all() as any[];
     const aucCols = new Set(aucInfo.map((c) => c.name));
 
@@ -235,6 +240,52 @@ export function initializeDatabase(dbPath: string = ':memory:'): Database.Databa
     if (!aucCols.has('compliance_requirements')) {
       db.exec('ALTER TABLE auctions ADD COLUMN compliance_requirements TEXT;');
     }
+
+    // 3. Migrate vendors (Add password_hash, address, onboarding columns)
+    const vndInfo = db.prepare("PRAGMA table_info('vendors')").all() as any[];
+    const vndCols = new Set(vndInfo.map((c) => c.name));
+    if (!vndCols.has('password_hash')) {
+      db.exec('ALTER TABLE vendors ADD COLUMN password_hash TEXT;');
+    }
+    if (!vndCols.has('address')) {
+      db.exec('ALTER TABLE vendors ADD COLUMN address TEXT;');
+    }
+    if (!vndCols.has('onboarding_token')) {
+      db.exec('ALTER TABLE vendors ADD COLUMN onboarding_token TEXT;');
+    }
+    if (!vndCols.has('onboarding_type')) {
+      db.exec("ALTER TABLE vendors ADD COLUMN onboarding_type TEXT DEFAULT 'full';");
+    }
+    if (!vndCols.has('onboarding_token_expires_at')) {
+      db.exec('ALTER TABLE vendors ADD COLUMN onboarding_token_expires_at DATETIME;');
+    }
+
+    // 4. Migrate platform_users (job_title, phone, status)
+    const usrInfo = db.prepare("PRAGMA table_info('platform_users')").all() as any[];
+    const usrCols = new Set(usrInfo.map((c) => c.name));
+    if (!usrCols.has('job_title')) {
+      db.exec("ALTER TABLE platform_users ADD COLUMN job_title TEXT DEFAULT 'Member';");
+    }
+    if (!usrCols.has('phone')) {
+      db.exec("ALTER TABLE platform_users ADD COLUMN phone TEXT DEFAULT '';");
+    }
+    if (!usrCols.has('status')) {
+      db.exec("ALTER TABLE platform_users ADD COLUMN status TEXT DEFAULT 'active';");
+    }
+
+    // 5. Vendor Team Members Table
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS vendor_team_members (
+        id TEXT PRIMARY KEY,
+        vendor_id TEXT REFERENCES vendors(id) ON DELETE CASCADE NOT NULL,
+        full_name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        phone TEXT,
+        role TEXT CHECK(role IN ('primary_bidder', 'commercial_lead', 'technical_evaluator', 'observer')) DEFAULT 'primary_bidder',
+        status TEXT DEFAULT 'active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
   } catch (migErr) {
     console.warn('Defensive schema migration notice:', migErr);
   }

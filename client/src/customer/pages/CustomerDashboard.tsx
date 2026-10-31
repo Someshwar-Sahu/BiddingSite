@@ -32,6 +32,7 @@ export const CustomerDashboard: React.FC = () => {
   const [amendAuction, setAmendAuction] = useState<Auction | null>(null);
   const [isAddFacilityOpen, setIsAddFacilityOpen] = useState(false);
   const [isAddSupplierOpen, setIsAddSupplierOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<{ type: 'facility' | 'supplier'; id: string; name: string } | null>(null);
 
   const inspectReqId = searchParams.get('inspectRequest');
   const targetAuctionId = searchParams.get('auctionId');
@@ -79,20 +80,18 @@ export const CustomerDashboard: React.FC = () => {
     setSearchParams(searchParams);
   };
 
-  const handleDeleteFacility = async (id: string) => {
-    if (!window.confirm('Are you sure you want to remove this delivery plant?')) return;
+  const handleExecuteDelete = async () => {
+    if (!confirmDelete) return;
     try {
-      const res = await fetch(`/api/customer/facilities/${id}`, { method: 'DELETE' });
-      if (res.ok) loadDashboard();
+      if (confirmDelete.type === 'facility') {
+        const res = await fetch(`/api/customer/facilities/${confirmDelete.id}`, { method: 'DELETE' });
+        if (res.ok) loadDashboard();
+      } else {
+        const res = await fetch(`/api/customer/vendors/${confirmDelete.id}`, { method: 'DELETE' });
+        if (res.ok) loadDashboard();
+      }
     } catch (_) {}
-  };
-
-  const handleDeleteSupplier = async (id: string) => {
-    if (!window.confirm('Are you sure you want to remove this vendor from your corporate pool?')) return;
-    try {
-      const res = await fetch(`/api/customer/vendors/${id}`, { method: 'DELETE' });
-      if (res.ok) loadDashboard();
-    } catch (_) {}
+    setConfirmDelete(null);
   };
 
   // 1. Filtered Auctions
@@ -439,7 +438,7 @@ export const CustomerDashboard: React.FC = () => {
                       <strong className="text-slate-900 block font-bold text-sm">{f.facility_name}</strong>
                       <button
                         type="button"
-                        onClick={() => handleDeleteFacility(f.id)}
+                        onClick={() => setConfirmDelete({ type: 'facility', id: f.id, name: f.facility_name })}
                         className="text-slate-300 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 cursor-pointer"
                         title="Delete Facility"
                       >
@@ -492,12 +491,24 @@ export const CustomerDashboard: React.FC = () => {
                   <div className="flex items-center justify-between">
                     <strong className="text-slate-900 text-sm font-bold">{v.company_name}</strong>
                     <div className="flex items-center gap-2">
-                      <span className="text-[10px] bg-emerald-50 text-emerald-800 font-bold px-2 py-0.5 rounded border border-emerald-200">
-                        APPROVED
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded border uppercase ${
+                          v.status === 'approved'
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : v.status === 'pending_approval'
+                            ? 'bg-amber-50 text-amber-800 border-amber-200'
+                            : 'bg-sky-50 text-sky-800 border-sky-200'
+                        }`}
+                      >
+                        {v.status === 'approved'
+                          ? 'Approved'
+                          : v.status === 'pending_approval'
+                          ? 'Pending Review'
+                          : 'Invited (Awaiting KYC)'}
                       </span>
                       <button
                         type="button"
-                        onClick={() => handleDeleteSupplier(v.id)}
+                        onClick={() => setConfirmDelete({ type: 'supplier', id: v.id, name: v.company_name })}
                         className="text-slate-300 hover:text-red-600 font-bold p-1 rounded hover:bg-red-50 cursor-pointer"
                         title="Remove from pool"
                       >
@@ -507,6 +518,10 @@ export const CustomerDashboard: React.FC = () => {
                   </div>
                   <span className="text-slate-600 block">{v.contact_person} • {v.phone}</span>
                   <span className="text-slate-400 font-mono text-[11px] block">{v.email}</span>
+                  <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100">
+                    <span>GSTIN: <strong className="font-mono text-slate-700">{v.gstin || 'None Provided'}</strong></span>
+                    <span>PAN: <strong className="font-mono text-slate-700">{v.pan || 'N/A'}</strong></span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -608,6 +623,39 @@ export const CustomerDashboard: React.FC = () => {
         onClose={() => setIsAddSupplierOpen(false)}
         onSuccess={loadDashboard}
       />
+
+      {/* CONFIRM DELETE MODAL (Zero Native Popups) */}
+      {confirmDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-4 border border-slate-200 text-xs">
+            <div className="flex items-center gap-3 text-red-600">
+              <span className="text-xl">⚠️</span>
+              <h3 className="text-sm font-bold text-slate-900">
+                Remove {confirmDelete.type === 'facility' ? 'Delivery Plant' : 'Supplier'}?
+              </h3>
+            </div>
+            <p className="text-slate-600 leading-relaxed">
+              Are you sure you want to remove <strong>"{confirmDelete.name}"</strong> from your corporate {confirmDelete.type === 'facility' ? 'directory' : 'vetted supplier pool'}?
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(null)}
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl cursor-pointer shadow-xs"
+              >
+                Confirm Remove
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
