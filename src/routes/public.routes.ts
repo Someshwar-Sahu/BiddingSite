@@ -46,9 +46,9 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
 
   router.get('/admin', adminAuth, (_req, res) => res.redirect('/admin/auctions'));
   router.get('/admin/auctions', adminAuth, sendAdminBundle);
-  router.get('/admin/auction-editor', adminAuth, (_req, res) => res.sendFile(path.resolve('private/admin/auction-editor.html')));
-  router.get('/admin/clients', adminAuth, (_req, res) => res.sendFile(path.resolve('private/admin/clients.html')));
-  router.get('/admin/vendors', adminAuth, (_req, res) => res.sendFile(path.resolve('private/admin/vendors.html')));
+  router.get('/admin/auction-editor', adminAuth, sendAdminBundle);
+  router.get('/admin/clients', adminAuth, sendAdminBundle);
+  router.get('/admin/vendors', adminAuth, sendAdminBundle);
 
   // ==========================================
   // REALM 2: CORPORATE BUYER WORKSPACE (TENANT ISOLATED)
@@ -72,6 +72,13 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
   });
   router.get('/customer-request', (_req, res) => res.redirect('/customer/request-tender'));
 
+  const sendObserverBundle = (_req: Request, res: Response) => {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+    res.sendFile(path.resolve('dist/client/observer.html'));
+  };
+
   // Executive Read-Only Spectator / Observer Room
   router.get('/observer/:id', (req, res) => {
     const cookies = parseCookies(req.headers.cookie);
@@ -81,14 +88,14 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
     if (custSession && custSession.role === 'customer' && custSession.organizationId) {
       const auction = db.prepare('SELECT customer_org_id FROM auctions WHERE id = ?').get(req.params.id) as any;
       if (auction && auction.customer_org_id === custSession.organizationId) {
-        return res.sendFile(path.resolve('public/customer-observer.html'));
+        return sendObserverBundle(req, res);
       }
     }
 
     // 2. Direct Access for Authenticated Admin / Operations Desk
     const adminSession = validateSession(db, cookies['nta_admin_session']);
     if (adminSession && adminSession.role === 'admin') {
-      return res.sendFile(path.resolve('public/customer-observer.html'));
+      return sendObserverBundle(req, res);
     }
 
     // 3. Fallback for External Tokenized Spectator Links (?key=token_...)
@@ -98,8 +105,8 @@ export function createPublicRouter(repo: AuctionRepository, db: Database.Databas
         const invite = db
           .prepare('SELECT role, is_revoked, expires_at FROM auction_invites WHERE token = ? AND auction_id = ?')
           .get(token, req.params.id) as any;
-        if (invite && invite.role === 'customer_observer' && !invite.is_revoked) {
-          return res.sendFile(path.resolve('public/customer-observer.html'));
+        if (invite && (invite.role === 'customer_observer' || invite.role === 'spectator') && !invite.is_revoked) {
+          return sendObserverBundle(req, res);
         }
       } catch (e) {
         // Fallback

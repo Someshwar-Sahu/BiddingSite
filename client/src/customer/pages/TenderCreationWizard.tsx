@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Organization, Facility, Vendor, Lot } from '../../types/procurement';
+import { SearchBar } from '../../components/SearchBar';
 
 interface CustomVendor {
   company_name: string;
@@ -52,6 +53,7 @@ export const TenderCreationWizard: React.FC = () => {
   // Step 3: Supplier Pool Allocation
   const [selectedVendorIds, setSelectedVendorIds] = useState<string[]>([]);
   const [customVendors, setCustomVendors] = useState<CustomVendor[]>([]);
+  const [vendorSearch, setVendorSearch] = useState<string>('');
 
   // Step 4: Commercial Terms & Instructions
   const [paymentTerms, setPaymentTerms] = useState('100% within 30 days post-inspection');
@@ -890,9 +892,16 @@ export const TenderCreationWizard: React.FC = () => {
             {/* Pre-Approved Vendors */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="font-bold text-slate-800">
-                  Pre-Approved Corporate Pool ({vendorPool.length})
-                </h3>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-slate-800">
+                    Pre-Approved Corporate Pool ({vendorPool.length})
+                  </h3>
+                  {vendorPool.length > 0 && (
+                    <span className="text-[10px] text-slate-500 font-mono bg-slate-100 px-2 py-0.5 rounded">
+                      {selectedVendorIds.length} Selected
+                    </span>
+                  )}
+                </div>
                 {vendorPool.length > 0 && (
                   <button
                     type="button"
@@ -904,37 +913,57 @@ export const TenderCreationWizard: React.FC = () => {
                 )}
               </div>
 
+              {vendorPool.length > 0 && (
+                <SearchBar
+                  value={vendorSearch}
+                  onChange={setVendorSearch}
+                  placeholder="Search suppliers by company, email, contact..."
+                  className="w-full"
+                />
+              )}
+
               {vendorPool.length === 0 ? (
                 <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center text-slate-400">
                   No pre-approved suppliers registered. Add external suppliers below.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-56 overflow-y-auto p-1">
-                  {vendorPool.map((v) => {
-                    const isSelected = selectedVendorIds.includes(v.id);
-                    return (
-                      <label
-                        key={v.id}
-                        className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${
-                          isSelected ? 'bg-blue-50/70 border-blue-300' : 'bg-slate-50 border-slate-200'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleToggleVendor(v.id)}
-                          className="mt-0.5 rounded"
-                        />
-                        <div className="flex-1 leading-snug">
-                          <strong className="block text-slate-900 font-bold">{v.company_name}</strong>
-                          <span className="text-[11px] text-slate-500 block">
-                            {v.contact_person} • {v.phone}
-                          </span>
-                          <span className="text-[10px] text-slate-400 font-mono block">{v.email}</span>
-                        </div>
-                      </label>
-                    );
-                  })}
+                  {vendorPool
+                    .filter((v) => {
+                      if (!vendorSearch.trim()) return true;
+                      const q = vendorSearch.toLowerCase().trim();
+                      return (
+                        (v.company_name && v.company_name.toLowerCase().includes(q)) ||
+                        (v.email && v.email.toLowerCase().includes(q)) ||
+                        (v.phone && v.phone.includes(q)) ||
+                        (v.contact_person && v.contact_person.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((v) => {
+                      const isSelected = selectedVendorIds.includes(v.id);
+                      return (
+                        <label
+                          key={v.id}
+                          className={`p-3 rounded-xl border flex items-start gap-3 cursor-pointer transition-colors ${
+                            isSelected ? 'bg-blue-50/70 border-blue-300' : 'bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleToggleVendor(v.id)}
+                            className="mt-0.5 rounded cursor-pointer"
+                          />
+                          <div className="flex-1 leading-snug">
+                            <strong className="block text-slate-900 font-bold">{v.company_name}</strong>
+                            <span className="text-[11px] text-slate-500 block">
+                              {v.contact_person} • {v.phone}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono block">{v.email}</span>
+                          </div>
+                        </label>
+                      );
+                    })}
                 </div>
               )}
             </div>

@@ -10,6 +10,7 @@ export default defineConfig({
       input: {
         admin: resolve(import.meta.dirname, 'client/admin.html'),
         customer: resolve(import.meta.dirname, 'client/customer.html'),
+        observer: resolve(import.meta.dirname, 'client/observer.html'),
       },
     },
     outDir: '../dist/client',

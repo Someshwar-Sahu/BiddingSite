@@ -199,6 +199,25 @@ export function registerAuctionSockets(
         });
       }
 
+      // Strict Enterprise Clock & Status Check
+      const activeAuction = db
+        .prepare('SELECT status, current_end FROM auctions WHERE id = ?')
+        .get(session.auctionId) as { status: string; current_end: string } | undefined;
+
+      if (!activeAuction || (activeAuction.status !== 'live' && activeAuction.status !== 'extended')) {
+        return socket.emit('error_message', {
+          code: 'AUCTION_NOT_LIVE',
+          message: `Bidding is strictly closed. This tender is currently in "${activeAuction?.status || 'unknown'}" status.`,
+        });
+      }
+
+      if (new Date() > new Date(activeAuction.current_end)) {
+        return socket.emit('error_message', {
+          code: 'AUCTION_EXPIRED',
+          message: 'The official bidding window has expired. No further bids are accepted.',
+        });
+      }
+
       const prevLot = db
         .prepare('SELECT current_l1_vendor_id FROM lots WHERE id = ?')
         .get(data.lotId) as { current_l1_vendor_id: string | null } | undefined;

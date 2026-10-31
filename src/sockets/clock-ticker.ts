@@ -30,13 +30,27 @@ export function startAuctionTicker(io: SocketIOServer, db: Database.Database): N
         isHardStopReached: state.isHardStopReached,
       });
 
+      // 1. Transition SCHEDULED -> LIVE when start time is reached
+      if (state.status === 'live' && auction.status === 'scheduled') {
+        db.prepare("UPDATE auctions SET status = 'live' WHERE id = ?").run(auction.id);
+        io.to(`auction:${auction.id}`).emit('auction_started', { auctionId: auction.id });
+        io.emit('auction_status_changed', { auctionId: auction.id, status: 'live' });
+        io.emit('auctions_updated');
+      }
+
+      // 2. Transition LIVE -> ENDED when timer expires (Atomically closes lots)
       if (state.status === 'ended' && auction.status !== 'ended') {
-        db.prepare("UPDATE auctions SET status = 'ended' WHERE id = ?").run(auction.id);
+        const endTx = db.transaction(() => {
+          db.prepare("UPDATE auctions SET status = 'ended' WHERE id = ?").run(auction.id);
+          db.prepare("UPDATE lots SET status = 'closed' WHERE auction_id = ?").run(auction.id);
+        });
+        endTx();
         io.to(`auction:${auction.id}`).emit('auction_ended', { auctionId: auction.id });
+        io.emit('auction_status_changed', { auctionId: auction.id, status: 'ended' });
+        io.emit('auctions_updated');
       }
     }
   }, 1000);
 
   return ticker;
 }
-

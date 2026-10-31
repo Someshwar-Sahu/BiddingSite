@@ -376,7 +376,7 @@ export const CustomerDashboard: React.FC = () => {
                           href={`/api/admin/auctions/${auc.id}/pdf`}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5"
+                          className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 btn-slate"
                         >
                           <span>📄</span> Download Settlement PDF
                         </a>
@@ -387,9 +387,11 @@ export const CustomerDashboard: React.FC = () => {
                       href={auc.observerUrl || `/observer/${auc.id}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-xs bg-slate-800 hover:bg-slate-900 text-white font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className="text-xs bg-slate-800 hover:bg-slate-900 text-white font-bold px-3.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer btn-white"
+                      style={{ color: '#ffffff' }}
                     >
-                      <span>👁️</span> Executive Observer Screen
+                      <span className="btn-white">👁️</span>
+                      <span className="btn-white" style={{ color: '#ffffff' }}>Executive Observer Screen</span>
                     </a>
                   </div>
                 </div>

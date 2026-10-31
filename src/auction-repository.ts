@@ -27,12 +27,30 @@ export class AuctionRepository {
    */
   placeBid(lotId: string, vendorId: string, amount: number) {
     const transaction = this.db.transaction(() => {
-      // 1. Fetch current lot state
+      // 1. Fetch current lot state along with parent auction status and current end time
       const lot = this.db
-        .prepare('SELECT * FROM lots WHERE id = ?')
-        .get(lotId) as LotRow | undefined;
+        .prepare(`
+          SELECT l.*, a.status as auction_status, a.current_end, a.scheduled_start
+          FROM lots l
+          JOIN auctions a ON l.auction_id = a.id
+          WHERE l.id = ?
+        `)
+        .get(lotId) as (LotRow & { auction_status: string; current_end: string; scheduled_start: string }) | undefined;
 
-      if (!lot) throw new Error('Lot not found.');
+      if (!lot) throw new Error('Procurement lot not found.');
+
+      // Strict Enterprise Guard 1: Auction must be actively in live or extended state
+      if (lot.auction_status !== 'live' && lot.auction_status !== 'extended') {
+        throw new Error(`Bidding is strictly closed. Auction is currently in "${lot.auction_status}" status.`);
+      }
+
+      // Strict Enterprise Guard 2: Auction clock must not have expired
+      const now = new Date();
+      if (now > new Date(lot.current_end)) {
+        throw new Error('Bidding window has expired. No further bids are accepted.');
+      }
+
+      // Strict Enterprise Guard 3: Lot must not be individually closed
       if (lot.status === 'closed') throw new Error('Lot is closed for bidding.');
 
       // 2. Validate bid using our Bid Calculator logic

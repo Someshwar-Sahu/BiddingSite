@@ -14,6 +14,8 @@ export const ReviewRequestModal: React.FC<Props> = ({ requestId, onClose, onSucc
   const [saving, setSaving] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [showDeclineModal, setShowDeclineModal] = useState(false);
+  const [declineReason, setDeclineReason] = useState('Declined by NexTrade Operations Desk');
 
   const [lots, setLots] = useState<Lot[]>([]);
   const [title, setTitle] = useState('');
@@ -141,6 +143,25 @@ export const ReviewRequestModal: React.FC<Props> = ({ requestId, onClose, onSucc
     } catch (err: any) {
       setErrorMessage(err.message);
       setShowOverrideModal(false);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const executeDecline = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/tender-requests/${requestId}/reject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: declineReason }),
+      });
+      if (!res.ok) throw new Error('Failed to decline request');
+      setShowDeclineModal(false);
+      onSuccess();
+      onClose();
+    } catch (err: any) {
+      setErrorMessage(err.message);
     } finally {
       setSaving(false);
     }
@@ -361,14 +382,24 @@ export const ReviewRequestModal: React.FC<Props> = ({ requestId, onClose, onSucc
           </div>
 
           {/* Footer */}
-          <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg cursor-pointer transition-colors"
-            >
-              Cancel
-            </button>
+          <div className="p-3 bg-slate-50 border-t border-slate-200 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold rounded-lg cursor-pointer transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => setShowDeclineModal(true)}
+                className="px-3.5 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-bold rounded-lg cursor-pointer transition-colors"
+              >
+                ✕ Decline / Dismiss
+              </button>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -390,6 +421,19 @@ export const ReviewRequestModal: React.FC<Props> = ({ requestId, onClose, onSucc
           </div>
         </div>
       </div>
+
+      {/* Decline Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showDeclineModal}
+        variant="danger"
+        title="Decline / Dismiss Tender Request"
+        message={`Are you sure you want to decline this request (${request?.request_number || requestId})? It will be removed from your active review queue.`}
+        confirmText="Decline Request"
+        cancelText="Keep"
+        isLoading={saving}
+        onConfirm={executeDecline}
+        onCancel={() => setShowDeclineModal(false)}
+      />
 
       {/* Override Confirmation Modal */}
       <ConfirmModal

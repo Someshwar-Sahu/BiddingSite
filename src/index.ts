@@ -34,63 +34,41 @@ db.prepare(`
     ('vnd_bridge', 'RS Bridge Consultancy', 'Rahul Sharma', 'rsbridgeconsultancy@gmail.com', '9876543212', '27AAPFU0939F1ZV', 'AAPFU0939F', 'approved')
 `).run();
 
-// Refresh 45-Minute Live Window for demo testing
-const now = new Date();
-const startTime = new Date(now.getTime() - 5 * 60 * 1000); // Started 5 mins ago
-const endTime = new Date(now.getTime() + 40 * 60 * 1000);   // 40 mins remaining
-
+// Ensure historical demo record exists without reviving or modifying it
 db.prepare(`
-  INSERT INTO auctions (
+  INSERT OR IGNORE INTO auctions (
     id, title, customer_org_id, scheduled_start, scheduled_end, 
     duration_minutes, anti_sniping_minutes, extension_step_minutes, 
     max_buffer_minutes, current_end, status, category, delivery_location, 
     special_instructions
   )
   VALUES (
-    'NTA-EPACKPetro-07', 'Epack Petrochem Disposal & Procurement Event', 'org_epack', ?, ?, 
-    45, 2, 3, 30, ?, 'live', 'Packaging & Petrochem', 'Bhiwadi Packaging Hub (Rajasthan)',
+    'NTA-EPACKPetro-07', 'Epack Petrochem Disposal & Procurement Event', 'org_epack',
+    '2026-10-30T10:00:00.000Z', '2026-10-30T10:45:00.000Z', 
+    45, 2, 3, 30, '2026-10-30T10:45:00.000Z', 'ended', 'Packaging & Petrochem', 'Bhiwadi Packaging Hub (Rajasthan)',
     '100% within 30 days post-inspection | Within 7 business days of PO dispatch'
   )
-  ON CONFLICT(id) DO UPDATE SET
-    scheduled_start = excluded.scheduled_start,
-    scheduled_end = excluded.scheduled_end,
-    current_end = excluded.current_end,
-    status = 'live',
-    category = COALESCE(auctions.category, excluded.category),
-    delivery_location = COALESCE(auctions.delivery_location, excluded.delivery_location),
-    special_instructions = COALESCE(auctions.special_instructions, excluded.special_instructions)
-`).run(startTime.toISOString(), endTime.toISOString(), endTime.toISOString());
-
-// Seed Lots: Pallets & Coal
-db.prepare(`
-  INSERT INTO lots (id, auction_id, lot_number, product_name, category, quantity, uom, start_price, reserve_price, bid_decrement, current_lowest_bid, current_l1_vendor_id, status)
-  VALUES 
-    ('lot_pallets', 'NTA-EPACKPetro-07', 1, 'Pallets Epackpetro-07', 'Non-PCB', 5000, 'Nos', 1400, 1500, 5, 1340, 'vnd_gold', 'open'),
-    ('lot_coal', 'NTA-EPACKPetro-07', 2, 'Imported Coal _Epackpetro-07', 'Non-PCB', 500, 'MT', 13000, 13500, 10, NULL, NULL, 'open')
-  ON CONFLICT(id) DO UPDATE SET
-    auction_id = excluded.auction_id,
-    lot_number = excluded.lot_number,
-    product_name = excluded.product_name,
-    category = excluded.category,
-    quantity = excluded.quantity,
-    uom = excluded.uom,
-    start_price = excluded.start_price,
-    reserve_price = excluded.reserve_price,
-    bid_decrement = excluded.bid_decrement,
-    status = 'open'
 `).run();
 
-// Seed / Refresh Active Magic Tokens with fresh 48-hour validity
+// Ensure past demo auction stays ended and closed (never revive)
+db.prepare("UPDATE auctions SET status = 'ended' WHERE id = 'NTA-EPACKPetro-07' AND status != 'ended'").run();
+db.prepare("UPDATE lots SET status = 'closed' WHERE auction_id = 'NTA-EPACKPetro-07'").run();
+
+// Seed Lots: Pallets & Coal (Immutable, only on initial setup)
 db.prepare(`
-  INSERT INTO auction_invites (id, auction_id, vendor_id, role, token, expires_at, is_revoked)
+  INSERT OR IGNORE INTO lots (id, auction_id, lot_number, product_name, category, quantity, uom, start_price, reserve_price, bid_decrement, current_lowest_bid, current_l1_vendor_id, status)
+  VALUES 
+    ('lot_pallets', 'NTA-EPACKPetro-07', 1, 'Pallets Epackpetro-07', 'Non-PCB', 5000, 'Nos', 1400, 1500, 5, 1255, 'vnd_gold', 'closed'),
+    ('lot_coal', 'NTA-EPACKPetro-07', 2, 'Imported Coal _Epackpetro-07', 'Non-PCB', 500, 'MT', 13000, 13500, 10, NULL, NULL, 'closed')
+`).run();
+
+// Seed Active Magic Tokens for demo testing
+db.prepare(`
+  INSERT OR IGNORE INTO auction_invites (id, auction_id, vendor_id, role, token, expires_at, is_revoked)
   VALUES 
     ('inv_gold', 'NTA-EPACKPetro-07', 'vnd_gold', 'vendor', 'token_gold_fuels_live_01', datetime('now', '+2 days'), 0),
     ('inv_bridge', 'NTA-EPACKPetro-07', 'vnd_bridge', 'vendor', 'token_bridge_consultancy_live_02', datetime('now', '+2 days'), 0),
     ('inv_epack_obs', 'NTA-EPACKPetro-07', NULL, 'customer_observer', 'token_epack_spectator_obs_03', datetime('now', '+2 days'), 0)
-  ON CONFLICT(id) DO UPDATE SET
-    token = excluded.token,
-    expires_at = datetime('now', '+2 days'),
-    is_revoked = 0
 `).run();
 
 // Always link baseline approved suppliers in company_vendors
@@ -131,9 +109,9 @@ httpServer.listen(PORT, () => {
   const observerUrl = buildAccessUrl(BASE_URL, 'NTA-EPACKPetro-07', 'token_epack_spectator_obs_03', 'customer_observer');
 
   console.log('\n================================================================');
-  console.log(`🚀 NexTrade Auctions (NTA) Live Platform: ${BASE_URL}`);
+  console.log(`🚀 NexTrade Auctions (NTA) Enterprise Platform: ${BASE_URL}`);
   console.log('================================================================');
-  console.log('Active Demo Tender: NTA-EPACKPetro-07 (Status: LIVE)');
+  console.log('Operational Status: Running (Data Guard Active)');
   console.log('\n🔒 REALM 1: OPERATIONS DESK (ADMIN)');
   console.log(`   URL:         ${BASE_URL}/admin/login`);
   console.log('   Credentials: admin@nextradeauctions.com / NTA_Admin_2026!');

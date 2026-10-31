@@ -47,6 +47,7 @@ flowchart TD
 2. **Anti-Cache Protection**: HTTP headers (`no-store, no-cache, must-revalidate, max-age=0`) force fresh auth validation on browser Back/Forward navigation.
 3. **Zero Native Alerts**: All blocking `window.confirm()` and `alert()` calls are eliminated in favor of branded in-app enterprise modals (`ConfirmModal.tsx`).
 4. **Reactive URL State Synchronization**: Modals and drawers synchronize seamlessly with React Router (`useSearchParams`). Closing a modal cleans the URL address bar immediately with zero full-page reload.
+5. **Concluded Auction Immutability & Bid Integrity Gate**: Concluded auctions (`ended`) are write-locked in perpetuity. The bid engine strictly validates that the parent auction is in active `live`/`extended` status and that `currentTime < current_end` before accepting any bid. Historical auctions can never be revived or accept late bids.
 
 ---
 
@@ -56,9 +57,9 @@ flowchart TD
 flowchart LR
     P1["Phase 1: Architecture & React Foundation<br/>✅ COMPLETED"] --> P2["Phase 2: Customer & Admin Dashboards<br/>✅ COMPLETED"]
     P2 --> P3["Phase 3: 5-Step Tender Creation Wizard<br/>✅ COMPLETED"]
-    P3 --> P4["Phase 4: Admin Deep Consoles<br/>🔄 NEXT IN LINE"]
-    P4 --> P5["Phase 5: Executive Spectator Console<br/>⏳ PLANNED"]
-    P5 --> P6["Phase 6: Vendor Live Bidding Room<br/>🔒 FINAL PHASE"]
+    P3 --> P4["Phase 4: Admin Deep Consoles<br/>✅ COMPLETED"]
+    P4 --> P5["Phase 5: Executive Spectator Console<br/>✅ COMPLETED (In Verification)"]
+    P5 --> P6["Phase 6: Vendor Live Bidding Room<br/>🔒 NEXT PHASE"]
 ```
 
 ---
@@ -129,37 +130,48 @@ Migrated the legacy wizard (`request-tender.html` / `request-tender.js`) into a 
 ---
 
 ### Phase 4: Admin Enterprise Consoles (Client Management, Vendor KYC, & Builder)
-**Status:** `PLANNED`
+**Status:** `COMPLETED & VERIFIED`
 
 Port remaining administrative tools into modular React views under the Admin layout:
 
-* [ ] **Corporate Clients Manager (`/admin/clients`)**:
-  - Port `private/admin/clients.html` and `public/js/admin/clients.js` to React (`ClientsManager.tsx`).
-  - View corporate buyer organizations, edit enterprise GSTIN/details, inspect assigned delivery plants, and manage corporate vendor pools.
-* [ ] **Vendor KYC & Verification Console (`/admin/vendors`)**:
-  - Port `private/admin/vendors.html` and `public/js/admin/vendors.js` to React (`VendorsManager.tsx`).
-  - Master supplier table with GSTIN/PAN verification status, business phone, contact person.
-  - 1-click KYC Approve / Suspend toggle calling `POST /api/admin/vendors/:id/approve`.
-* [ ] **Advanced Auction Builder Console (`/admin/auction-editor`)**:
-  - Port `private/admin/auction-editor.html` and `public/js/admin/auction-editor.js` to React (`AuctionBuilder.tsx`).
-  - Direct desk creation of reverse auctions, custom rule adjustments, lot splitting, and emergency parameter overrides.
-* [ ] **Cleanup**: Retire legacy `clients.html`, `vendors.html`, `auction-editor.html` and their corresponding `.js` files.
+* [x] **Corporate Clients Manager (`/admin/clients`)**:
+  - Ported `private/admin/clients.html` and `public/js/admin/clients.js` to React ([`ClientsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/ClientsManager.tsx)).
+  - View corporate buyer organizations, search and filter by name/GSTIN/code via [`SearchBar.tsx`](file:///e:/Projects/BiddingSite/client/src/components/SearchBar.tsx), register new corporate clients, and manage exclusive corporate vendor pools with modal link/register/unlink controls.
+* [x] **Vendor KYC & Verification Console (`/admin/vendors`)**:
+  - Ported `private/admin/vendors.html` and `public/js/admin/vendors.js` to React ([`VendorsManager.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/VendorsManager.tsx)).
+  - Master supplier table with GSTIN/PAN verification status, business phone, contact person, compliance status badges, and assigned corporate buyers.
+  - 1-click KYC Approve toggle calling `POST /api/admin/vendors/:id/approve` and modal to assign verified suppliers to corporate buyers.
+* [x] **Advanced Auction Builder & Editor Console (`/admin/auction-editor`)**:
+  - Ported `private/admin/auction-editor.html` and `public/js/admin/auction-editor.js` to React ([`AuctionBuilder.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/pages/AuctionBuilder.tsx)).
+  - Supports both **Create Mode** (auto-sequential ID generator, client picker, default lots) and **Edit Mode** (`?id=...`, material update notification toggle, and live/ended lock protection).
+  - Multi-lot dynamic builder, delivery location, commercial instructions, anti-sniping rules, and vendor pool checklist modal.
+* [x] **Routing & Layout Integration**:
+  - Connected in [`AdminApp.tsx`](file:///e:/Projects/BiddingSite/client/src/admin/AdminApp.tsx) with active tab styling and React Router navigation.
+  - Updated [`src/routes/public.routes.ts`](file:///e:/Projects/BiddingSite/src/routes/public.routes.ts) to serve `sendAdminBundle` on `/admin/clients`, `/admin/vendors`, and `/admin/auction-editor`.
+* [x] **Visited Link Color Neutralization**: Added explicit `.btn-white:visited` rules in `<style>` across HTML headers and components, ensuring pure white text regardless of browser history.
+* [x] **Cleanup**: Retired legacy `clients.html`, `vendors.html`, `auction-editor.html` and their corresponding `.js` files.
 
 ---
 
 ### Phase 5: Executive Read-Only Spectator / Observer Room
-**Status:** `PLANNED`
+**Status:** `COMPLETED (In Verification)`
 
-Modernize `/observer/:id` (accessible by authenticated corporate buyers and desk supervisors):
+Modernize `/observer/:id` (accessible by authenticated corporate buyers, desk supervisors, and guest invite tokens):
 
-* [ ] **Port Spectator View to React (`ObserverConsole.tsx`)**:
-  - Secure room access via customer session cookie or external spectator key (`?key=token_...`).
+* [x] **Port Spectator View to React ([`ObserverApp.tsx`](file:///e:/Projects/BiddingSite/client/src/observer/ObserverApp.tsx))**:
+  - Standalone SPA entry point: [`client/observer.html`](file:///e:/Projects/BiddingSite/client/observer.html) & [`client/src/observer/main.tsx`](file:///e:/Projects/BiddingSite/client/src/observer/main.tsx).
+  - Secure room access via customer session cookie, admin session cookie, or external spectator key (`?key=token_...`).
   - Synchronized NTP countdown timer displaying active bidding window.
-  - Direct direct procurement savings counter vs baseline ceiling.
-  - **Financial Logic Fix**: Strict enforcement that unbid lots are never added to "Committed Spend", accurately categorizing unbid lots as **Unallocated Reserve Budget**.
-  - Dynamic live bid audit trail streaming chronological price drops over WebSockets.
-  - Audio alert toggle for incoming bids.
-* [ ] **Cleanup**: Retire `public/customer-observer.html` and `public/js/customer-observer.js`.
+  - Direct procurement savings counter vs baseline ceiling ($+\text{₹Savings}$ and $\% \text{Savings}$).
+  - **Financial Procurement Metric Integrity**: Strict enforcement that unbid lots are never counted towards "Committed Spend", accurately displaying unbid lots as **Unallocated Reserve Budget**.
+  - Dynamic live bid audit trail streaming chronological price drops over WebSockets with decrement drop callouts.
+  - Web Audio API Alert Engine ([`useObserverAudio.ts`](file:///e:/Projects/BiddingSite/client/src/observer/useObserverAudio.ts)) with mute toggle.
+  - Anti-sniping dynamic extension notification alert banner.
+  - Settlement banner when ended with direct link to download the 6-page official settlement audit report PDF.
+* [x] **Build & Route Pipeline**:
+  - Added `observer` input bundle to `vite.config.ts`.
+  - Updated Express `src/routes/public.routes.ts` to serve `sendObserverBundle` with anti-cache headers.
+* [ ] **Cleanup**: Retire legacy `public/customer-observer.html` and `public/js/customer-observer.js` upon verification.
 
 ---
 

@@ -1110,7 +1110,23 @@ export function createCustomerRequestsRouter(db: Database.Database, io?: SocketI
         target_url: `/customer/dashboard?inspectRequest=${existing.id}`,
       });
 
+      if (io) io.emit('requests_updated');
       res.json({ success: true, message: 'Tender request declined.' });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Admin: Delete / Remove a Tender Request (De-cluttering)
+  router.delete('/admin/tender-requests/:id', (req, res) => {
+    try {
+      const existing = db.prepare('SELECT * FROM tender_requests WHERE id = ? OR request_number = ?').get(req.params.id, req.params.id) as any;
+      if (!existing) return res.status(404).json({ error: 'Tender request not found.' });
+
+      db.prepare('DELETE FROM tender_requests WHERE id = ?').run(existing.id);
+
+      if (io) io.emit('requests_updated');
+      res.json({ success: true, message: 'Tender request permanently removed from database.' });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
